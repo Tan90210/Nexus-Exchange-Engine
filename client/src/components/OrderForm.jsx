@@ -1,20 +1,32 @@
 import { useState } from 'react'
-import { mockPortfolio, mockAssets } from '../mock/data'
 
 function fmt(n) {
   return '₹' + Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-export default function OrderForm({ onTradeSuccess }) {
-  const [side, setSide] = useState('BUY')
-  const [orderType, setOrderType] = useState('MARKET')
-  const [assetId, setAssetId] = useState(1)
-  const [qty, setQty] = useState('')
-  const [limitPrice, setLimitPrice] = useState('')
+export default function OrderForm({
+  // Real data props (from DashboardPage via /api/portfolio)
+  assets = [],
+  portfolio = null,
+  isLoading = false,
+  // Controlled state — lifted to DashboardPage so OrderPreview can mirror live
+  side,
+  orderType,
+  assetId,
+  qty,
+  limitPrice,
+  onSideChange,
+  onOrderTypeChange,
+  onAssetChange,
+  onQtyChange,
+  onLimitPriceChange,
+  // Callback after a trade is submitted
+  onTradeSuccess,
+}) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const selectedAsset = mockAssets.find((a) => a.assetId === assetId) || mockAssets[0]
+  const selectedAsset = assets.find((a) => a.assetId === assetId) || assets[0]
 
   function isValid() {
     const q = parseInt(qty)
@@ -30,18 +42,47 @@ export default function OrderForm({ onTradeSuccess }) {
     e.preventDefault()
     setError('')
     setLoading(true)
-    // Swap: await api.post('/api/trades', { assetId, type: side, qty: parseInt(qty), orderType, limitPrice: parseFloat(limitPrice) })
+
+    // TODO (P2): swap this mock for the real call once /api/trades is live:
+    // const res = await api.post('/api/trades', {
+    //   assetId,
+    //   type: side,
+    //   qty: parseInt(qty),
+    //   orderType,
+    //   ...(orderType === 'LIMIT' ? { limitPrice: parseFloat(limitPrice) } : {}),
+    // })
+    // const result = res.data
+
     await new Promise((r) => setTimeout(r, 700))
     const mockResult = {
       tradeId: Math.floor(Math.random() * 900) + 100,
       status: 'COMMITTED',
-      executedPrice: selectedAsset.currentPrice + (Math.random() * 10 - 5),
-      totalValue: parseInt(qty) * selectedAsset.currentPrice,
+      executedPrice: selectedAsset
+        ? selectedAsset.currentPrice + (Math.random() * 10 - 5)
+        : 0,
+      totalValue: parseInt(qty) * (selectedAsset?.currentPrice ?? 0),
     }
+
     setLoading(false)
-    setQty('')
-    setLimitPrice('')
+    onQtyChange('')
+    onLimitPriceChange('')
     onTradeSuccess && onTradeSuccess(mockResult, side, selectedAsset)
+  }
+
+  // While portfolio is loading, show a disabled skeleton state
+  if (isLoading) {
+    return (
+      <div className="surface rounded-sm overflow-hidden">
+        <div className="px-5 py-3 border-b border-border">
+          <p className="mono text-xs text-text-muted tracking-widest">PLACE ORDER</p>
+        </div>
+        <div className="p-5 space-y-4 animate-pulse">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-10 bg-border rounded-sm" />
+          ))}
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -57,7 +98,7 @@ export default function OrderForm({ onTradeSuccess }) {
             <button
               key={s}
               type="button"
-              onClick={() => setSide(s)}
+              onClick={() => onSideChange(s)}
               className={`mono text-xs font-medium py-2.5 tracking-widest rounded-sm border transition-colors ${
                 side === s
                   ? s === 'BUY'
@@ -77,7 +118,7 @@ export default function OrderForm({ onTradeSuccess }) {
             <button
               key={ot}
               type="button"
-              onClick={() => setOrderType(ot)}
+              onClick={() => onOrderTypeChange(ot)}
               className={`mono text-xs py-2 tracking-widest rounded-sm border transition-colors ${
                 orderType === ot
                   ? 'border-info text-info bg-info/10'
@@ -89,15 +130,15 @@ export default function OrderForm({ onTradeSuccess }) {
           ))}
         </div>
 
-        {/* Asset selector */}
+        {/* Asset selector — real data from /api/portfolio */}
         <div>
           <label className="block mono text-xs text-text-muted mb-1.5 tracking-wider">ASSET</label>
           <select
-            value={assetId}
-            onChange={(e) => setAssetId(parseInt(e.target.value))}
+            value={assetId ?? ''}
+            onChange={(e) => onAssetChange(parseInt(e.target.value))}
             className="w-full px-3 py-2.5 text-sm rounded-sm mono"
           >
-            {mockAssets.map((a) => (
+            {assets.map((a) => (
               <option key={a.assetId} value={a.assetId}>
                 {a.symbol} — {a.name}
               </option>
@@ -113,7 +154,7 @@ export default function OrderForm({ onTradeSuccess }) {
             min="1"
             step="1"
             value={qty}
-            onChange={(e) => setQty(e.target.value)}
+            onChange={(e) => onQtyChange(e.target.value)}
             placeholder="0"
             className="w-full px-3 py-2.5 text-sm rounded-sm mono"
           />
@@ -122,14 +163,16 @@ export default function OrderForm({ onTradeSuccess }) {
         {/* Limit price (LIMIT only) */}
         {orderType === 'LIMIT' && (
           <div>
-            <label className="block mono text-xs text-text-muted mb-1.5 tracking-wider">LIMIT PRICE (₹)</label>
+            <label className="block mono text-xs text-text-muted mb-1.5 tracking-wider">
+              LIMIT PRICE (₹)
+            </label>
             <input
               type="number"
               min="0.01"
               step="0.01"
               value={limitPrice}
-              onChange={(e) => setLimitPrice(e.target.value)}
-              placeholder={selectedAsset.currentPrice.toFixed(2)}
+              onChange={(e) => onLimitPriceChange(e.target.value)}
+              placeholder={selectedAsset ? selectedAsset.currentPrice.toFixed(2) : '0.00'}
               className="w-full px-3 py-2.5 text-sm rounded-sm mono"
             />
           </div>
