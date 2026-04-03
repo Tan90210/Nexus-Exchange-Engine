@@ -6,11 +6,12 @@ import cors from 'cors';
 
 import errorHandler from './middleware/errorHandler.js';
 
-// Import routes (leaving placeholders for future implementation)
+// Import routes
 import authRoutes from './routes/auth.js';
-// import tradesRoutes from './routes/trades.js';
+import tradesRoutes from './routes/trades.js';
 import portfolioRoutes from './routes/portfolio.js';
-// import auditRoutes from './routes/audit.js';
+import auditRoutes from './routes/audit.js';
+import adminRoutes from './routes/admin.js';
 
 const app = express();
 
@@ -19,9 +20,10 @@ app.use(express.json());
 
 // Routes
 app.use('/api/auth', authRoutes);
-// app.use('/api/trades', tradesRoutes);
+app.use('/api/trades', tradesRoutes);
 app.use('/api/portfolio', portfolioRoutes);
-// app.use('/api/audit', auditRoutes);
+app.use('/api/audit', auditRoutes);
+app.use('/api/admin', adminRoutes);
 
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date() });

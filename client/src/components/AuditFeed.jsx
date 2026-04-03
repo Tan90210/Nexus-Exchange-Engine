@@ -1,87 +1,73 @@
-import { useEffect, useRef, useState } from 'react'
-import { mockAudit } from '../mock/data'
+import { useRef, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import api from '../api/axios'
 
 function truncateHash(hash) {
-  return hash.slice(0, 6) + '...' + hash.slice(-4)
-}
-
-function formatTime(iso) {
-  const d = new Date(iso)
-  return d.toLocaleTimeString('en-IN', { hour12: false, timeZone: 'Asia/Kolkata' })
+  if (!hash) return ''
+  return hash.slice(0, 16) + '...' + hash.slice(-8)
 }
 
 export default function AuditFeed() {
-  // Swap: use polling or websocket to get live audit entries
-  const [entries, setEntries] = useState(mockAudit.entries.slice(0, 10))
-  const [live, setLive] = useState(true)
+  const { data: logs, isLoading } = useQuery({
+    queryKey: ['audit'],
+    queryFn: () => api.get('/api/audit?limit=20').then(r => r.data),
+    refetchInterval: 5000
+  })
+
+  const auditLogs = logs ?? []
   const feedRef = useRef(null)
 
-  // Simulate new entries coming in
+  // Auto-scroll to top on new logs
   useEffect(() => {
-    if (!live) return
-    const interval = setInterval(() => {
-      const newEntry = {
-        id: Date.now(),
-        timestamp: new Date().toISOString(),
-        tradeId: Math.floor(Math.random() * 900) + 100,
-        userId: Math.floor(Math.random() * 7) + 1,
-        side: Math.random() > 0.5 ? 'BUY' : 'SELL',
-        assetSymbol: ['RELI', 'TCS', 'INFY', 'HDFC', 'WIPRO'][Math.floor(Math.random() * 5)],
-        qty: Math.floor(Math.random() * 100) + 1,
-        price: 1000 + Math.random() * 3000,
-        txHash: '0x' + Math.random().toString(16).slice(2, 12) + Math.random().toString(16).slice(2, 12),
-        verified: true,
-      }
-      setEntries((prev) => [newEntry, ...prev.slice(0, 49)])
-    }, 4000)
-    return () => clearInterval(interval)
-  }, [live])
+    if (feedRef.current) {
+      feedRef.current.scrollTop = 0
+    }
+  }, [auditLogs.length])
 
   return (
-    <div className="surface rounded-sm overflow-hidden flex flex-col h-full">
-      {/* Header */}
-      <div className="px-4 py-3 border-b border-border flex items-center justify-between flex-shrink-0">
-        <p className="mono text-xs text-text-muted tracking-widest">AUDIT FEED</p>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setLive((l) => !l)}
-            className={`mono text-xs tracking-wider px-2 py-0.5 border rounded-sm transition-colors ${
-              live ? 'border-warn/50 text-warn bg-warn/10' : 'border-border text-text-muted'
-            }`}
-          >
-            {live ? '● LIVE' : '○ PAUSED'}
-          </button>
+    <div className="surface rounded-sm h-full flex flex-col overflow-hidden">
+      <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+        <p className="mono text-xs text-text-muted tracking-widest">LIVE AUDIT FEED</p>
+        <div className="flex items-center gap-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-profit animate-pulse" />
+          <span className="mono text-[10px] text-profit tracking-widest">LIVE</span>
         </div>
       </div>
 
-      {/* Feed */}
-      <div ref={feedRef} className="overflow-y-auto flex-1 divide-y divide-border">
-        {entries.map((entry) => (
-          <div
-            key={entry.id}
-            className="px-4 py-2.5 hover:bg-bg/50 transition-colors"
-          >
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div className="flex items-center gap-2">
-                <span className={`mono text-xs font-medium ${entry.side === 'BUY' ? 'text-profit' : 'text-loss'}`}>
-                  {entry.side}
-                </span>
-                <span className="mono text-xs text-info">{entry.assetSymbol}</span>
-                <span className="mono text-xs text-text-muted">{entry.qty}@</span>
-                <span className="mono text-xs text-text-primary">
-                  ₹{Number(entry.price).toFixed(2)}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="mono text-xs text-info" title={entry.txHash}>
-                  {truncateHash(entry.txHash)}
-                </span>
-                {entry.verified && (
-                  <span className="text-profit text-xs" title="Verified">✓</span>
-                )}
-              </div>
+      <div
+        ref={feedRef}
+        className="flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar"
+      >
+        {isLoading && auditLogs.length === 0 && (
+          <div className="mono text-xs text-text-muted animate-pulse">CONNECTING TO LEDGER...</div>
+        )}
+
+        {auditLogs.length === 0 && !isLoading && (
+          <div className="mono text-xs text-text-muted">WAITING FOR NETWORK ACTIVITY...</div>
+        )}
+
+        {auditLogs.map((log) => (
+          <div key={log.auditId} className="space-y-1.5 border-l border-info/30 pl-3 py-0.5">
+            <div className="flex items-center justify-between">
+              <span className="mono text-[10px] text-text-muted">
+                {new Date(log.created_at).toLocaleTimeString()}
+              </span>
+              <span className="mono text-[10px] text-info font-medium tracking-tighter">
+                TX_{log.tradeId}
+              </span>
             </div>
-            <p className="mono text-xs text-text-muted mt-0.5">{formatTime(entry.timestamp)}</p>
+            <p className="mono text-xs text-text-primary break-all leading-relaxed">
+              <span className="text-info font-bold">COMMIT</span> hash:{' '}
+              <span className="text-text-muted">{truncateHash(log.tx_hash)}</span>
+            </p>
+            <div className="flex gap-2">
+              <span className="mono text-[10px] bg-surface-lighter px-1.5 py-0.5 rounded-sm border border-border">
+                {log.symbol}
+              </span>
+              <span className="mono text-[10px] text-text-muted py-0.5">
+                {log.qty} shares @ ₹{log.executed_price}
+              </span>
+            </div>
           </div>
         ))}
       </div>

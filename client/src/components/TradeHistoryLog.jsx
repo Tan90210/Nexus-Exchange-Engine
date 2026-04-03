@@ -1,7 +1,5 @@
-import { useState } from 'react'
-import { mockAudit } from '../mock/data'
-
-const PAGE_SIZE = 10
+import { useQuery } from '@tanstack/react-query'
+import api from '../api/axios'
 
 function truncateHash(hash) {
   if (!hash) return ''
@@ -14,26 +12,25 @@ function formatTime(iso) {
 }
 
 export default function TradeHistoryLog() {
-  // Swap: const { data } = useQuery(['audit', page], () => api.get(`/api/audit?page=${page}&limit=${PAGE_SIZE}`))
-  const allEntries = mockAudit.entries
-  const total = mockAudit.total
+  const { data: history, isLoading } = useQuery({
+    queryKey: ['trade-history'],
+    queryFn: () => api.get('/api/audit/history?limit=20').then(r => r.data)
+  })
 
-  const [page, setPage] = useState(1)
-  const totalPages = Math.ceil(allEntries.length / PAGE_SIZE)
-  const entries = allEntries.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const trades = history ?? []
 
   return (
     <div className="surface rounded-sm overflow-hidden">
       <div className="px-5 py-3 border-b border-border flex items-center justify-between">
         <p className="mono text-xs text-text-muted tracking-widest">TRADE HISTORY</p>
-        <p className="mono text-xs text-text-muted">{total} total entries</p>
+        <p className="mono text-xs text-text-muted">{trades.length} recent entries</p>
       </div>
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm min-w-[700px]">
           <thead>
             <tr className="border-b border-border">
-              {['Timestamp', 'Tx Hash', 'Asset', 'Side', 'Qty', 'Price'].map((h) => (
+              {['Timestamp', 'Asset', 'Side', 'Qty', 'Price', 'Value'].map((h) => (
                 <th key={h} className="text-left px-5 py-3 mono text-xs text-text-muted tracking-wider">
                   {h}
                 </th>
@@ -41,53 +38,44 @@ export default function TradeHistoryLog() {
             </tr>
           </thead>
           <tbody>
-            {entries.map((entry) => (
-              <tr key={entry.id} className="border-b border-border hover:bg-bg/50 transition-colors">
-                <td className="px-5 py-3 mono text-xs text-text-muted whitespace-nowrap">
-                  {formatTime(entry.timestamp)}
+            {isLoading && (
+              <tr>
+                <td colSpan="6" className="px-5 py-8 text-center text-text-muted mono text-xs skeleton">
+                  Loading trade history...
                 </td>
-                <td className="px-5 py-3 mono text-xs text-info" title={entry.txHash}>
-                  {truncateHash(entry.txHash)}
+              </tr>
+            )}
+            {!isLoading && trades.length === 0 && (
+              <tr>
+                <td colSpan="6" className="px-5 py-8 text-center text-text-muted mono text-xs">
+                  No trades found.
+                </td>
+              </tr>
+            )}
+            {!isLoading && trades.map((trade) => (
+              <tr key={trade.id} className="border-b border-border hover:bg-bg/50 transition-colors">
+                <td className="px-5 py-3 mono text-xs text-text-muted whitespace-nowrap">
+                  {formatTime(trade.executed_at)}
                 </td>
                 <td className="px-5 py-3 mono text-xs text-info font-medium">
-                  {entry.assetSymbol}
+                  {trade.symbol}
                 </td>
                 <td className="px-5 py-3">
-                  <span className={entry.side === 'BUY' ? 'badge-profit' : 'badge-loss'}>
-                    {entry.side}
+                  <span className={trade.entry_type === 'DEBIT' ? 'badge-profit' : 'badge-loss'}>
+                    {trade.entry_type === 'DEBIT' ? 'BUY' : 'SELL'}
                   </span>
                 </td>
-                <td className="px-5 py-3 mono text-xs text-text-primary">{entry.qty}</td>
+                <td className="px-5 py-3 mono text-xs text-text-primary">{trade.qty}</td>
                 <td className="px-5 py-3 mono text-xs text-text-primary">
-                  ₹{Number(entry.price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  ₹{Number(trade.executed_price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </td>
+                <td className="px-5 py-3 mono text-xs text-text-primary font-medium">
+                  ₹{Number(trade.total_value).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
-
-      {/* Pagination */}
-      <div className="px-5 py-3 border-t border-border flex items-center justify-between">
-        <span className="mono text-xs text-text-muted">
-          Page {page} of {totalPages}
-        </span>
-        <div className="flex gap-3">
-          <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-            className="mono text-xs text-text-muted hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed tracking-wider"
-          >
-            ← PREV
-          </button>
-          <button
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-            className="mono text-xs text-text-muted hover:text-text-primary disabled:opacity-30 disabled:cursor-not-allowed tracking-wider"
-          >
-            NEXT →
-          </button>
-        </div>
       </div>
     </div>
   )

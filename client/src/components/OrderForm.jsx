@@ -1,15 +1,15 @@
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import api from '../api/axios'
 
 function fmt(n) {
   return '₹' + Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 export default function OrderForm({
-  // Real data props (from DashboardPage via /api/portfolio)
   assets = [],
   portfolio = null,
   isLoading = false,
-  // Controlled state — lifted to DashboardPage so OrderPreview can mirror live
   side,
   orderType,
   assetId,
@@ -20,16 +20,16 @@ export default function OrderForm({
   onAssetChange,
   onQtyChange,
   onLimitPriceChange,
-  // Callback after a trade is submitted
   onTradeSuccess,
 }) {
+  const queryClient = useQueryClient()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   const selectedAsset = assets.find((a) => a.assetId === assetId) || assets[0]
 
   function isValid() {
-    const q = parseInt(qty)
+    const q = parseFloat(qty)
     if (!q || q <= 0) return false
     if (orderType === 'LIMIT') {
       const lp = parseFloat(limitPrice)
@@ -40,36 +40,38 @@ export default function OrderForm({
 
   async function handleSubmit(e) {
     e.preventDefault()
-    setError('')
+    if (!qty || isNaN(qty) || Number(qty) <= 0) return
+
     setLoading(true)
+    setError('')
 
-    // TODO (P2): swap this mock for the real call once /api/trades is live:
-    // const res = await api.post('/api/trades', {
-    //   assetId,
-    //   type: side,
-    //   qty: parseInt(qty),
-    //   orderType,
-    //   ...(orderType === 'LIMIT' ? { limitPrice: parseFloat(limitPrice) } : {}),
-    // })
-    // const result = res.data
+    try {
+      const res = await api.post('/api/trades', {
+        assetId,
+        side,
+        orderType,
+        qty: Number(qty),
+        limitPrice: orderType === 'LIMIT' ? Number(limitPrice) : null
+      })
 
-    await new Promise((r) => setTimeout(r, 700))
-    const mockResult = {
-      tradeId: Math.floor(Math.random() * 900) + 100,
-      status: 'COMMITTED',
-      executedPrice: selectedAsset
-        ? selectedAsset.currentPrice + (Math.random() * 10 - 5)
-        : 0,
-      totalValue: parseInt(qty) * (selectedAsset?.currentPrice ?? 0),
+      // Refetch portfolio and audit logs to update the UI
+      queryClient.invalidateQueries({ queryKey: ['portfolio'] })
+      queryClient.invalidateQueries({ queryKey: ['audit'] })
+      queryClient.invalidateQueries({ queryKey: ['trade-history'] })
+
+      if (onTradeSuccess) {
+        onTradeSuccess(res.data, side, selectedAsset)
+      }
+
+      // Reset quantity
+      onQtyChange('')
+    } catch (err) {
+      setError(err.response?.data?.error || 'Trade execution failed.')
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
-    onQtyChange('')
-    onLimitPriceChange('')
-    onTradeSuccess && onTradeSuccess(mockResult, side, selectedAsset)
   }
 
-  // While portfolio is loading, show a disabled skeleton state
   if (isLoading) {
     return (
       <div className="surface rounded-sm overflow-hidden">
@@ -92,45 +94,40 @@ export default function OrderForm({
       </div>
 
       <form onSubmit={handleSubmit} className="p-5 space-y-4">
-        {/* BUY / SELL toggle */}
         <div className="grid grid-cols-2 gap-2">
           {['BUY', 'SELL'].map((s) => (
             <button
               key={s}
               type="button"
               onClick={() => onSideChange(s)}
-              className={`mono text-xs font-medium py-2.5 tracking-widest rounded-sm border transition-colors ${
-                side === s
-                  ? s === 'BUY'
-                    ? 'bg-profit/10 border-profit text-profit'
-                    : 'bg-loss/10 border-loss text-loss'
-                  : 'border-border text-text-muted hover:text-text-primary'
-              }`}
+              className={`mono text-xs font-medium py-2.5 tracking-widest rounded-sm border transition-colors ${side === s
+                ? s === 'BUY'
+                  ? 'bg-profit/10 border-profit text-profit'
+                  : 'bg-loss/10 border-loss text-loss'
+                : 'border-border text-text-muted hover:text-text-primary'
+                }`}
             >
               {s}
             </button>
           ))}
         </div>
 
-        {/* Order type */}
         <div className="grid grid-cols-2 gap-2">
           {['MARKET', 'LIMIT'].map((ot) => (
             <button
               key={ot}
               type="button"
               onClick={() => onOrderTypeChange(ot)}
-              className={`mono text-xs py-2 tracking-widest rounded-sm border transition-colors ${
-                orderType === ot
-                  ? 'border-info text-info bg-info/10'
-                  : 'border-border text-text-muted hover:text-text-primary'
-              }`}
+              className={`mono text-xs py-2 tracking-widest rounded-sm border transition-colors ${orderType === ot
+                ? 'border-info text-info bg-info/10'
+                : 'border-border text-text-muted hover:text-text-primary'
+                }`}
             >
               {ot}
             </button>
           ))}
         </div>
 
-        {/* Asset selector — real data from /api/portfolio */}
         <div>
           <label className="block mono text-xs text-text-muted mb-1.5 tracking-wider">ASSET</label>
           <select
@@ -146,7 +143,6 @@ export default function OrderForm({
           </select>
         </div>
 
-        {/* Quantity */}
         <div>
           <label className="block mono text-xs text-text-muted mb-1.5 tracking-wider">QUANTITY</label>
           <input
@@ -160,7 +156,6 @@ export default function OrderForm({
           />
         </div>
 
-        {/* Limit price (LIMIT only) */}
         {orderType === 'LIMIT' && (
           <div>
             <label className="block mono text-xs text-text-muted mb-1.5 tracking-wider">
@@ -183,11 +178,10 @@ export default function OrderForm({
         <button
           type="submit"
           disabled={!isValid() || loading}
-          className={`w-full mono text-sm font-medium py-3 rounded-sm tracking-widest transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-            side === 'BUY'
-              ? 'bg-profit text-black hover:bg-green-400'
-              : 'bg-loss text-white hover:bg-red-400'
-          }`}
+          className={`w-full mono text-sm font-medium py-3 rounded-sm tracking-widest transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${side === 'BUY'
+            ? 'bg-profit text-black hover:bg-green-400'
+            : 'bg-loss text-white hover:bg-red-400'
+            }`}
         >
           {loading ? 'EXECUTING...' : `PLACE ${side} ORDER →`}
         </button>

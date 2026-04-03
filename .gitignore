@@ -104,3 +104,5 @@ pnpm-lock.yaml
 # npm keeps package-lock.json — do not ignore it
 
 CLAUDE.md
+
+server/.env
