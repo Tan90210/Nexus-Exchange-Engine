@@ -12,12 +12,19 @@ router.use(verifyJWT);
  */
 router.get('/stats', async (req, res, next) => {
     try {
-        // Simple health check and pool stats
+        const internalPool = pool.pool;
+        const totalConnections = internalPool?._allConnections?.length ?? null;
+        const idleConnections = internalPool?._freeConnections?.length ?? null;
+        const activeConnections =
+            totalConnections != null && idleConnections != null
+                ? totalConnections - idleConnections
+                : null;
+
         res.json({
             status: 'HEALTHY',
             uptime: process.uptime(),
-            connections: pool.pool.activeConnections,
-            idleConnections: pool.pool.idleConnections,
+            connections: activeConnections,
+            idleConnections,
             timestamp: new Date()
         });
     } catch (error) {

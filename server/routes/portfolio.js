@@ -33,4 +33,13 @@ router.get('/history', async (req, res, next) => {
     }
 });
 
+router.get('/assets', async (req, res, next) => {
+    try {
+        const result = await PortfolioService.getAssets();
+        res.status(200).json(result);
+    } catch (error) {
+        next(error);
+    }
+});
+
 export default router;

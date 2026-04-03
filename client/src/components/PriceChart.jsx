@@ -19,21 +19,23 @@ function CustomTooltip({ active, payload, label }) {
   )
 }
 
-export default function PriceChart({ selectedAssetId }) {
-  const assetId = selectedAssetId || 1
+export default function PriceChart({ selectedAssetId, assets = [] }) {
+  const assetId = selectedAssetId ?? assets[0]?.assetId ?? null
   
   const { data: historyData, isLoading: isLoadingHistory } = useQuery({
     queryKey: ['history', assetId],
-    queryFn: () => api.get(`/api/portfolio/history?assetId=${assetId}&range=14d`).then(r => r.data)
+    queryFn: () => api.get(`/api/portfolio/history?assetId=${assetId}&range=14d`).then(r => r.data),
+    enabled: assetId != null
   })
 
-  // Deduplicated portfolio query
-  const { data: portfolioData } = useQuery({
-    queryKey: ['portfolio'],
-    queryFn: () => api.get('/api/portfolio').then(r => r.data)
-  })
+  if (assetId == null) {
+    return (
+      <div className="surface rounded-sm overflow-hidden h-[290px] flex items-center justify-center">
+        <span className="mono text-xs text-text-muted">No asset selected.</span>
+      </div>
+    )
+  }
 
-  // Loading state
   if (isLoadingHistory || !historyData) {
     return (
       <div className="surface rounded-sm overflow-hidden h-[290px] flex items-center justify-center skeleton">
@@ -42,7 +44,7 @@ export default function PriceChart({ selectedAssetId }) {
     )
   }
 
-  const holding = portfolioData?.holdings?.find((h) => h.assetId === assetId)
+  const asset = assets.find((item) => item.assetId === assetId)
 
   const prices = historyData.prices
   const first = prices[0]?.price || 0
@@ -58,7 +60,7 @@ export default function PriceChart({ selectedAssetId }) {
         <div>
           <div className="flex items-center gap-3">
             <span className="mono text-info font-medium">{historyData.symbol}</span>
-            <span className="text-xs text-text-muted">{holding?.name}</span>
+            <span className="text-xs text-text-muted">{historyData.name || asset?.name}</span>
           </div>
           <p className="mono text-xl font-medium text-text-primary mt-1">{fmt(last)}</p>
         </div>

@@ -2,6 +2,8 @@ USE nexus_db;
 
 DELIMITER //
 
+DROP TRIGGER IF EXISTS after_trade_insert//
+
 CREATE TRIGGER after_trade_insert
 AFTER INSERT ON trades
 FOR EACH ROW

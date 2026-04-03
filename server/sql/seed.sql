@@ -24,22 +24,22 @@ INSERT INTO wallets (user_id, balance) VALUES
 
 -- 4. Insert Holdings
 
--- Arjun (user 1): RELI 120 (avg 2410), TCS 40 (avg 3720), INFY 60 (avg 1690), HDFC 30 (avg 1540), WIPRO 80 (avg 498)
+-- Arjun (user 1): RELI 130 (includes seeded BUY trade of 10), TCS 40 (avg 3720), INFY 60 (avg 1690), HDFC 30 (avg 1540), WIPRO 80 (avg 498)
 INSERT INTO holdings (user_id, asset_id, quantity, avg_cost_basis) VALUES
-(1, 1, 120, 2410.00),
+(1, 1, 130, 2423.19),
 (1, 2, 40, 3720.00),
 (1, 3, 60, 1690.00),
 (1, 4, 30, 1540.00),
 (1, 5, 80, 498.00);
 
--- Priya (user 2): RELI 50 (avg 2500), TCS 20 (avg 3800)
+-- Priya (user 2): RELI 50 (avg 2500), TCS 15 (after seeded SELL trade of 5)
 INSERT INTO holdings (user_id, asset_id, quantity, avg_cost_basis) VALUES
 (2, 1, 50, 2500.00),
-(2, 2, 20, 3800.00);
+(2, 2, 15, 3800.00);
 
--- Rohan (user 3): INFY 100 (avg 1700), WIPRO 200 (avg 490)
+-- Rohan (user 3): INFY 112 (includes seeded BUY trade of 12), WIPRO 200 (avg 490)
 INSERT INTO holdings (user_id, asset_id, quantity, avg_cost_basis) VALUES
-(3, 3, 100, 1700.00),
+(3, 3, 112, 1691.79),
 (3, 5, 200, 490.00);
 
 -- Kavya (user 4): HDFC 80 (avg 1600), TCS 30 (avg 3900)
@@ -133,3 +133,34 @@ INSERT INTO price_history (asset_id, price, recorded_at) VALUES
 (5, 470.00, DATE_SUB(CURDATE(), INTERVAL 3 DAY)),
 (5, 465.00, DATE_SUB(CURDATE(), INTERVAL 2 DAY)),
 (5, 472.15, DATE_SUB(CURDATE(), INTERVAL 1 DAY));
+
+-- 6. Insert Sample Orders
+INSERT INTO orders (id, user_id, asset_id, type, order_type, qty, limit_price, status, created_at) VALUES
+(1, 1, 1, 'BUY', 'MARKET', 10, NULL, 'FILLED', DATE_SUB(NOW(), INTERVAL 3 HOUR)),
+(2, 2, 2, 'SELL', 'LIMIT', 5, 3895.00, 'FILLED', DATE_SUB(NOW(), INTERVAL 2 HOUR)),
+(3, 3, 3, 'BUY', 'MARKET', 12, NULL, 'FILLED', DATE_SUB(NOW(), INTERVAL 90 MINUTE));
+
+-- 7. Insert Sample Trades
+INSERT INTO trades (id, buy_order_id, sell_order_id, asset_id, qty, executed_price, executed_at) VALUES
+(1, 1, NULL, 1, 10, 2581.50, DATE_SUB(NOW(), INTERVAL 3 HOUR)),
+(2, NULL, 2, 2, 5, 3895.00, DATE_SUB(NOW(), INTERVAL 2 HOUR)),
+(3, 3, NULL, 3, 12, 1623.40, DATE_SUB(NOW(), INTERVAL 90 MINUTE));
+
+-- 8. Insert Sample Ledger Entries
+INSERT INTO ledger_entries (trade_id, user_id, entry_type, amount, asset_id, created_at) VALUES
+(1, 1, 'DEBIT', 25815.00, 1, DATE_SUB(NOW(), INTERVAL 3 HOUR)),
+(2, 2, 'CREDIT', 19475.00, 2, DATE_SUB(NOW(), INTERVAL 2 HOUR)),
+(3, 3, 'DEBIT', 19480.80, 3, DATE_SUB(NOW(), INTERVAL 90 MINUTE));
+
+-- 9. Backfill Audit Rows If Trigger Wasn't Installed Before Seeding
+INSERT INTO audit_log (trade_id, tx_hash, created_at)
+SELECT
+    t.id,
+    SHA2(CONCAT(t.id, '|', t.asset_id, '|', t.qty, '|', t.executed_price, '|', t.executed_at), 512),
+    t.executed_at
+FROM trades t
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM audit_log al
+    WHERE al.trade_id = t.id
+);

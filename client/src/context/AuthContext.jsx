@@ -1,41 +1,32 @@
-import { createContext, useContext, useState, useEffect } from 'react';
-
-const AuthContext = createContext(null);
+import { useState } from 'react'
+import { AuthContext, getStoredAuth } from './auth-context'
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
-
-  useEffect(() => {
-    const storedToken = localStorage.getItem('nexus_token');
-    const storedUser = localStorage.getItem('nexus_user');
-    if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(JSON.parse(storedUser));
-    }
-  }, []);
+  const [authState, setAuthState] = useState(getStoredAuth)
 
   function login(newToken, newUser) {
-    localStorage.setItem('nexus_token', newToken);
-    localStorage.setItem('nexus_user', JSON.stringify(newUser));
-    setToken(newToken);
-    setUser(newUser);
+    localStorage.setItem('nexus_token', newToken)
+    localStorage.setItem('nexus_user', JSON.stringify(newUser))
+    setAuthState({ token: newToken, user: newUser })
   }
 
   function logout() {
-    localStorage.removeItem('nexus_token');
-    localStorage.removeItem('nexus_user');
-    setToken(null);
-    setUser(null);
+    localStorage.removeItem('nexus_token')
+    localStorage.removeItem('nexus_user')
+    setAuthState({ token: null, user: null })
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isAuthenticated: !!token }}>
+    <AuthContext.Provider
+      value={{
+        user: authState.user,
+        token: authState.token,
+        login,
+        logout,
+        isAuthenticated: !!authState.token,
+      }}
+    >
       {children}
     </AuthContext.Provider>
-  );
-}
-
-export function useAuth() {
-  return useContext(AuthContext);
+  )
 }

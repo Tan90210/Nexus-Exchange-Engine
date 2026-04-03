@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import api from '../api/axios'
 import TopBar from '../components/TopBar'
@@ -13,13 +13,13 @@ import AdminView from '../components/AdminView'
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState('trader')
-  const [selectedAssetId, setSelectedAssetId] = useState(null)
+  const [selectedAssetIdState, setSelectedAssetId] = useState(null)
   const [lastTrade, setLastTrade] = useState(null)
 
   // OrderForm state lifted up so OrderPreview can do live calculations
   const [orderSide, setOrderSide] = useState('BUY')
   const [orderType, setOrderType] = useState('MARKET')
-  const [orderAssetId, setOrderAssetId] = useState(null)
+  const [orderAssetIdState, setOrderAssetId] = useState(null)
   const [orderQty, setOrderQty] = useState('')
   const [orderLimitPrice, setOrderLimitPrice] = useState('')
 
@@ -30,21 +30,14 @@ export default function DashboardPage() {
     staleTime: 30_000,
   })
 
-  // Derive the assets list from real holdings (same shape as old mockAssets)
-  const assets = portfolio?.holdings.map((h) => ({
-    assetId: h.assetId,
-    symbol: h.symbol,
-    name: h.name,
-    currentPrice: h.currentPrice,
-  })) ?? []
+  const { data: assets = [] } = useQuery({
+    queryKey: ['assets'],
+    queryFn: () => api.get('/api/assets').then((r) => r.data),
+    staleTime: 30_000,
+  })
 
-  // Once we have real assets, seed the selected IDs from the first asset
-  useEffect(() => {
-    if (assets.length > 0 && selectedAssetId === null) {
-      setSelectedAssetId(assets[0].assetId)
-      setOrderAssetId(assets[0].assetId)
-    }
-  }, [assets.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  const selectedAssetId = selectedAssetIdState ?? assets[0]?.assetId ?? null
+  const orderAssetId = orderAssetIdState ?? assets[0]?.assetId ?? null
 
   function handleTradeSuccess(result, side, asset) {
     setLastTrade({ ...result, side, symbol: asset.symbol, qty: orderQty })
@@ -75,7 +68,7 @@ export default function DashboardPage() {
                   />
                 </div>
                 <div>
-                  <PriceChart selectedAssetId={selectedAssetId} />
+                  <PriceChart selectedAssetId={selectedAssetId} assets={assets} />
                 </div>
               </div>
 
@@ -83,7 +76,6 @@ export default function DashboardPage() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <OrderForm
                   assets={assets}
-                  portfolio={portfolio}
                   isLoading={isLoading}
                   // Controlled state — lifted up for live OrderPreview
                   side={orderSide}
@@ -113,7 +105,6 @@ export default function DashboardPage() {
                 />
               </div>
 
-              {/* Trade History — stays on mock until P2 ships /api/audit */}
               <TradeHistoryLog />
             </>
           ) : (

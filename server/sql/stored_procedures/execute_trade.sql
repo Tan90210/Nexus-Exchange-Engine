@@ -19,7 +19,6 @@ BEGIN
     DECLARE v_holding_qty DECIMAL(15, 4);
     DECLARE v_order_id INT;
     DECLARE v_trade_id INT;
-    DECLARE v_other_user_id INT DEFAULT 0; -- System or counterparty (simplified for demo)
 
     -- Error handling
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
@@ -47,7 +46,7 @@ BEGIN
 
     IF p_side = 'BUY' THEN
         IF v_user_balance < v_total_cost THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Insufficient balance';
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'INSUFFICIENT_FUNDS';
         END IF;
         
         -- Update Wallet
@@ -65,7 +64,7 @@ BEGIN
         WHERE user_id = p_user_id AND asset_id = p_asset_id FOR UPDATE;
         
         IF v_holding_qty IS NULL OR v_holding_qty < p_qty THEN
-            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Insufficient holdings';
+            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'INSUFFICIENT_HOLDINGS';
         END IF;
 
         -- Update Wallet
@@ -104,7 +103,10 @@ BEGIN
     COMMIT;
 
     -- Return the result
-    SELECT v_trade_id AS trade_id, v_executed_price AS price, v_total_cost AS total;
+    SELECT
+        v_trade_id AS tradeId,
+        v_executed_price AS executedPrice,
+        v_total_cost AS totalValue;
 END //
 
 DELIMITER ;

@@ -18,7 +18,44 @@ export const getPriceHistory = async (assetId, days) => {
     return rows;
 };
 
-export const getSymbolByAssetId = async (assetId) => {
-    const [rows] = await pool.query('SELECT symbol FROM assets WHERE id = ?', [assetId]);
-    return rows.length ? rows[0].symbol : null;
+export const getAssetById = async (assetId) => {
+    const [rows] = await pool.query('SELECT symbol, name FROM assets WHERE id = ?', [assetId]);
+    return rows.length ? rows[0] : null;
+};
+
+export const getAllAssets = async () => {
+    const [rows] = await pool.query(
+        'SELECT id AS assetId, symbol, name, current_price AS currentPrice FROM assets ORDER BY symbol ASC'
+    );
+    return rows;
+};
+
+export const getPortfolioDailyChange = async (userId) => {
+    const query = `
+        SELECT
+            ROUND(
+                (
+                    SUM(h.quantity * a.current_price) - SUM(h.quantity * COALESCE(prev.price, a.current_price))
+                ) / NULLIF(SUM(h.quantity * COALESCE(prev.price, a.current_price)), 0) * 100,
+                2
+            ) AS daily_change
+        FROM holdings h
+        JOIN assets a ON a.id = h.asset_id
+        LEFT JOIN (
+            SELECT ph.asset_id, ph.price
+            FROM price_history ph
+            JOIN (
+                SELECT asset_id, MAX(recorded_at) AS recorded_at
+                FROM price_history
+                WHERE recorded_at < CURDATE()
+                GROUP BY asset_id
+            ) latest
+                ON latest.asset_id = ph.asset_id
+               AND latest.recorded_at = ph.recorded_at
+        ) prev ON prev.asset_id = h.asset_id
+        WHERE h.user_id = ?
+    `;
+
+    const [rows] = await pool.query(query, [userId]);
+    return rows[0]?.daily_change ?? 0;
 };

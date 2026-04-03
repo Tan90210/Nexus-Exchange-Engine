@@ -17,7 +17,7 @@ export const createUser = async (email, passwordHash, name) => {
         const userId = result.insertId;
         
         await connection.query(
-            'INSERT INTO wallets (user_id, balance) VALUES (?, 0)',
+            'INSERT INTO wallets (user_id, balance) VALUES (?, 100000)',
             [userId]
         );
         

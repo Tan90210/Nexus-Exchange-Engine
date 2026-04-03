@@ -1,9 +1,10 @@
 import * as PortfolioQueries from '../db/queries/portfolio.js';
 
 export const getPortfolio = async (userId) => {
-    const [holdingsRaw, cashBalanceStr] = await Promise.all([
+    const [holdingsRaw, cashBalanceStr, dailyChangeRaw] = await Promise.all([
         PortfolioQueries.getPortfolioMtm(userId),
-        PortfolioQueries.getCashBalance(userId)
+        PortfolioQueries.getCashBalance(userId),
+        PortfolioQueries.getPortfolioDailyChange(userId)
     ]);
 
     const cashBalance = parseFloat(cashBalanceStr) || 0;
@@ -35,7 +36,7 @@ export const getPortfolio = async (userId) => {
         cashBalance,
         totalMtm,
         unrealizedPnl: totalUnrealizedPnl,
-        dailyChange: 0,
+        dailyChange: parseFloat(dailyChangeRaw) || 0,
         holdings
     };
 };
@@ -49,12 +50,12 @@ export const getPriceHistory = async (assetId, range) => {
         }
     }
 
-    const [pricesRaw, symbol] = await Promise.all([
+    const [pricesRaw, asset] = await Promise.all([
         PortfolioQueries.getPriceHistory(assetId, days),
-        PortfolioQueries.getSymbolByAssetId(assetId)
+        PortfolioQueries.getAssetById(assetId)
     ]);
 
-    if (!symbol) {
+    if (!asset) {
         const error = new Error('Asset not found');
         error.status = 404;
         throw error;
@@ -74,7 +75,19 @@ export const getPriceHistory = async (assetId, range) => {
 
     return {
         assetId,
-        symbol,
+        symbol: asset.symbol,
+        name: asset.name,
         prices
     };
+};
+
+export const getAssets = async () => {
+    const assets = await PortfolioQueries.getAllAssets();
+
+    return assets.map((asset) => ({
+        assetId: asset.assetId,
+        symbol: asset.symbol,
+        name: asset.name,
+        currentPrice: parseFloat(asset.currentPrice)
+    }));
 };

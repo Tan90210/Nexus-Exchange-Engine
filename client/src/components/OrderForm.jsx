@@ -2,13 +2,8 @@ import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import api from '../api/axios'
 
-function fmt(n) {
-  return '₹' + Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
-
 export default function OrderForm({
   assets = [],
-  portfolio = null,
   isLoading = false,
   side,
   orderType,
@@ -48,7 +43,7 @@ export default function OrderForm({
     try {
       const res = await api.post('/api/trades', {
         assetId,
-        side,
+        type: side,
         orderType,
         qty: Number(qty),
         limitPrice: orderType === 'LIMIT' ? Number(limitPrice) : null
@@ -65,6 +60,7 @@ export default function OrderForm({
 
       // Reset quantity
       onQtyChange('')
+      onLimitPriceChange('')
     } catch (err) {
       setError(err.response?.data?.error || 'Trade execution failed.')
     } finally {

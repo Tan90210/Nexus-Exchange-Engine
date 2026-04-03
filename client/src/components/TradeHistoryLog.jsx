@@ -1,11 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import api from '../api/axios'
 
-function truncateHash(hash) {
-  if (!hash) return ''
-  return hash.slice(0, 6) + '...' + hash.slice(-4)
-}
-
 function formatTime(iso) {
   const d = new Date(iso)
   return d.toLocaleString('en-IN', { hour12: false, timeZone: 'Asia/Kolkata' })

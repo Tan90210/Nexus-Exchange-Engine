@@ -60,8 +60,8 @@ CREATE TABLE orders (
 -- 6. trades
 CREATE TABLE trades (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    buy_order_id INT NOT NULL,
-    sell_order_id INT NOT NULL,
+    buy_order_id INT NULL,
+    sell_order_id INT NULL,
     asset_id INT NOT NULL,
     qty DECIMAL(15, 4) NOT NULL,
     executed_price DECIMAL(15, 2) NOT NULL,
@@ -100,6 +100,7 @@ CREATE TABLE audit_log (
     trade_id INT NOT NULL,
     tx_hash VARCHAR(130) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_audit_trade (trade_id),
     FOREIGN KEY (trade_id) REFERENCES trades(id)
 ) ENGINE=InnoDB;
 

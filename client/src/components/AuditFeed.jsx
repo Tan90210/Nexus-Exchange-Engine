@@ -14,7 +14,7 @@ export default function AuditFeed() {
     refetchInterval: 5000
   })
 
-  const auditLogs = logs ?? []
+  const auditLogs = logs?.entries ?? []
   const feedRef = useRef(null)
 
   // Auto-scroll to top on new logs
@@ -47,10 +47,10 @@ export default function AuditFeed() {
         )}
 
         {auditLogs.map((log) => (
-          <div key={log.auditId} className="space-y-1.5 border-l border-info/30 pl-3 py-0.5">
+          <div key={log.id} className="space-y-1.5 border-l border-info/30 pl-3 py-0.5">
             <div className="flex items-center justify-between">
               <span className="mono text-[10px] text-text-muted">
-                {new Date(log.created_at).toLocaleTimeString()}
+                {new Date(log.timestamp).toLocaleTimeString()}
               </span>
               <span className="mono text-[10px] text-info font-medium tracking-tighter">
                 TX_{log.tradeId}
@@ -58,14 +58,14 @@ export default function AuditFeed() {
             </div>
             <p className="mono text-xs text-text-primary break-all leading-relaxed">
               <span className="text-info font-bold">COMMIT</span> hash:{' '}
-              <span className="text-text-muted">{truncateHash(log.tx_hash)}</span>
+              <span className="text-text-muted">{truncateHash(log.txHash)}</span>
             </p>
             <div className="flex gap-2">
               <span className="mono text-[10px] bg-surface-lighter px-1.5 py-0.5 rounded-sm border border-border">
-                {log.symbol}
+                {log.assetSymbol}
               </span>
               <span className="mono text-[10px] text-text-muted py-0.5">
-                {log.qty} shares @ ₹{log.executed_price}
+                {log.qty} shares @ ₹{log.price}
               </span>
             </div>
           </div>

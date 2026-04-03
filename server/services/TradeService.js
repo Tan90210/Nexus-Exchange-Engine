@@ -1,4 +1,4 @@
-import pool from '../db/pool.js';
+import { executeTradeProcedure } from '../db/queries/trades.js';
 
 class TradeService {
     /**
@@ -6,32 +6,44 @@ class TradeService {
      * Maps MySQL errors to meaningful business errors.
      */
     static async execute(userId, tradeData) {
-        const { assetId, side, orderType, qty, limitPrice } = tradeData;
+        const { assetId, orderType, qty, limitPrice } = tradeData;
+        const side = tradeData.type || tradeData.side;
 
         try {
-            // Call the stored procedure:
-            // CALL execute_trade(p_user_id, p_asset_id, p_side, p_order_type, p_qty, p_limit_price)
-            const [rows] = await pool.query(
-                'CALL execute_trade(?, ?, ?, ?, ?, ?)',
-                [userId, assetId, side, orderType, qty, limitPrice || null]
+            const result = await executeTradeProcedure(
+                userId,
+                assetId,
+                side,
+                orderType,
+                qty,
+                limitPrice || null
             );
 
-            // The procedure returns the trade results in the first element of the rows array
-            return rows[0][0];
+            return {
+                tradeId: result?.tradeId ?? result?.trade_id,
+                status: 'COMMITTED',
+                executedPrice: result?.executedPrice ?? result?.price,
+                totalValue: result?.totalValue ?? result?.total
+            };
         } catch (error) {
             console.error('TradeService Error:', error);
 
-            // Map MySQL Error 1213 (Deadlock) to a specific status
             if (error.errno === 1213) {
-                const err = new Error('System busy. Please try again.');
+                const err = new Error('Deadlock detected');
                 err.status = 503;
+                err.payload = { error: 'DEADLOCK_DETECTED', retryAfter: 500 };
                 throw err;
             }
 
-            // Map custom SIGNAL messages
             if (error.sqlState === '45000') {
+                const message = error.message.toLowerCase();
                 const err = new Error(error.message);
-                err.status = 409; // Conflict/Business rule violation
+                err.status = 409;
+                err.payload = {
+                    error: message.includes('holding')
+                        ? 'INSUFFICIENT_HOLDINGS'
+                        : 'INSUFFICIENT_FUNDS'
+                };
                 throw err;
             }
 

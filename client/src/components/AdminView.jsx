@@ -45,13 +45,13 @@ export default function AdminView() {
           />
           <StatCard
             label="Active Pool"
-            value={(stats?.connections || 0).toString()}
+            value={stats?.connections == null ? 'N/A' : stats.connections.toString()}
             subValue="DB connections"
             color={(stats?.connections || 0) > 5 ? 'warn' : 'default'}
           />
           <StatCard
             label="Idle Pool"
-            value={(stats?.idleConnections || 0).toString()}
+            value={stats?.idleConnections == null ? 'N/A' : stats.idleConnections.toString()}
             subValue="available seats"
           />
         </div>

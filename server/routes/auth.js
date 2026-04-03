@@ -20,7 +20,7 @@ router.post('/register', async (req, res, next) => {
     try {
         const { email, password, name } = registerSchema.parse(req.body);
         const result = await UserService.register(email, password, name);
-        res.status(201).json(result);
+        res.status(200).json(result);
     } catch (error) {
         if (error instanceof z.ZodError) {
             return res.status(400).json({ error: error.errors[0].message });
