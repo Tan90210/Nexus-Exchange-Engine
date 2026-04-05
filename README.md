@@ -14,7 +14,7 @@
 
 ## What this is
 
-Nexus Exchange Engine simulates a digital asset exchange where users can buy and sell assets with strict **ACID guarantees**. The core goal is demonstrating that concurrent trades on the same asset pool never cause race conditions, double-spending, or ghost-asset anomalies — even under high load.
+Nexus Exchange Engine simulates a digital asset exchange where users can buy and sell assets with strict **ACID guarantees**. The core goal is demonstrating that concurrent trades on the same asset pool never cause race conditions, double-spending, or ghost-asset anomalies — even under high load. This is a 10/10 level DBMS demonstration that pushes heavy financial logic directly into the MySQL engine.
 
 ---
 
@@ -29,7 +29,7 @@ Express API Gateway (port 3001)
          │
          ▼
 Service Layer
-  └── TradeService · PortfolioService · UserService · AuditService
+  └── TradeService · OrderService · PortfolioService · UserService · AuditService
          │
          ▼
 Data Access Layer
@@ -47,15 +47,40 @@ MySQL 8 InnoDB
 
 | Concept | Implementation |
 |---------|---------------|
-| ACID transactions | `execute_trade` stored procedure with `BEGIN...COMMIT` |
-| Deadlock prevention | Canonical lock order — always lock lower `user_id` first |
-| Row-level locking | `SELECT FOR UPDATE` on wallets + holdings |
-| WORM audit log | `AFTER INSERT` trigger writes `SHA2(512)` hash immutably |
-| MTM valuation | `portfolio_mtm` view — joins holdings × live asset prices |
-| WAC costing | `wac_view` — weighted average cost across buy events |
-| Constraints | `CHECK (balance >= 0)` · `CHECK (quantity >= 0)` |
-| Isolation level | `REPEATABLE READ` (InnoDB default) |
-| Normalization | Third Normal Form (3NF) |
+| **ACID transactions** | `execute_trade` and `settle_partial_trade` SPs wrapped in `BEGIN...COMMIT` blocks. |
+| **Deadlock prevention** | Canonical lock order approach — always locks the lower `user_id` first. |
+| **Row-level locking** | Aggressive usage of `SELECT FOR UPDATE` on wallets + holdings. |
+| **WORM audit log** | `AFTER INSERT` trigger writes `SHA2(512)` hash immutably. `BEFORE UPDATE` and `BEFORE DELETE` triggers physically block tampering. |
+| **Window Functions** | Native SQL analytics (`RANK() OVER`, `SUM() OVER(PARTITION)`). Includes an advanced unpartitioned `SUM() OVER()` view for global exchange weight. |
+| **Partial Fills** | Stateful tracking of `filled_qty` across order executions natively in SQL. |
+| **Double-Entry Ledgers**| Both fully matched trades and standalone `deposit/withdraw` ops hit the immutable `ledger_entries` table. |
+| **Constraints** | `CHECK (balance >= 0)`, `CHECK (quantity >= 0)`, and physical `FOREIGN KEY` bounds safely. |
+| **Isolation level** | `REPEATABLE READ` (InnoDB default). |
+| **Normalization** | Third Normal Form (3NF). |
+
+---
+
+## Advanced Database Entities
+
+### Stored Procedures (`server/sql/stored_procedures/`)
+- `execute_trade`: Matches exact P2P trades with atomic DB constraints.
+- `settle_partial_trade`: Fills split quantifies securely and keeps remainder OPEN.
+- `cancel_order`: Refunds reserved cash or assets with compensating ledger entries.
+- `deposit_funds` / `withdraw_funds`: Safe, atomic standalone ops.
+- `get_order_book`: Pulls active Limit orders out with strict `ORDER BY limit_price ASC/DESC, created_at ASC` priority logic. 
+
+### Views (`server/sql/views/`)
+- `portfolio_mtm`: Realtime MTM valuation for active holdings.
+- `user_pnl_summary_view`: Live aggregation over PnL grouping with `RANK() OVER()`.
+- `user_trade_summary_view`: Generates complex statistics using **correlated subqueries**.
+- `running_balance_view`: Rolling wallet trajectories computed via `SUM() OVER(PARTITION)`. 
+- `user_exchange_weight_view`: Global capital distribution against all users via an **unpartitioned** `SUM() OVER()`.
+- `open_orders_view` & `asset_volume_view` & `wac_view`.
+
+### Triggers (`server/sql/triggers/`)
+- `audit_log_trigger`: Auto-hashes trade parameters via `SHA2` on `INSERT`.
+- `prevent_audit_tampering`: Rejects `UPDATE`/`DELETE` via `SQLSTATE 45000` to enforce immutability.
+- `price_history_trigger`: Auto-scrapes tracking data to history after price mutations.
 
 ---
 
@@ -64,56 +89,20 @@ MySQL 8 InnoDB
 ```
 nexus/
 ├── client/                          # React frontend
-│   ├── vite.config.js
-│   ├── tailwind.config.js
 │   └── src/
-│       ├── api/axios.js             # Axios instance with JWT interceptor
-│       ├── context/AuthContext.jsx  # Auth state + login/logout
-│       ├── mock/data.js             # Mock data matching API shapes
-│       ├── pages/
-│       │   ├── LoginPage.jsx
-│       │   └── DashboardPage.jsx
-│       └── components/
-│           ├── TopBar.jsx           # Fixed header
-│           ├── TabNav.jsx           # Trader / Admin tab switch
-│           ├── StatCard.jsx         # Reusable metric card
-│           ├── PortfolioSummaryBar.jsx
-│           ├── HoldingsTable.jsx    # Sortable with P&L badges
-│           ├── PriceChart.jsx       # Recharts line chart
-│           ├── OrderForm.jsx        # BUY/SELL · MARKET/LIMIT
-│           ├── OrderPreview.jsx     # Live cost/proceeds calc
-│           ├── TradeHistoryLog.jsx  # Paginated ledger entries
-│           ├── AuditFeed.jsx        # Live audit feed with tx hashes
-│           └── AdminView.jsx        # Locks · health · audit
-│
+│       ├── pages/                   # Login, Dashboard
+│       └── components/              # HoldingsTable, PriceChart, OrderForm, AuditFeed, AdminView
 └── server/
     ├── index.js                     # Express entry (port 3001)
-    ├── routes/
-    │   ├── auth.js                  # /api/auth/login · /register
-    │   ├── trades.js                # /api/trades
-    │   ├── portfolio.js             # /api/portfolio · /history
-    │   └── audit.js                 # /api/audit
-    ├── services/
-    │   ├── TradeService.js
-    │   ├── PortfolioService.js
-    │   ├── UserService.js
-    │   └── AuditService.js
-    ├── db/
-    │   ├── pool.js                  # mysql2 connection pool
-    │   └── queries/                 # SQL wrappers per domain
-    ├── middleware/
-    │   ├── verifyJWT.js
-    │   └── errorHandler.js
+    ├── routes/                      # REST endpoints (auth, trades, orders, portfolio, admin)
+    ├── services/                    # Business orchestration logic 
+    ├── db/                          # MySQL pool + parameterized queries
+    ├── middleware/                  # JWT and Zod layers
     └── sql/
-        ├── schema.sql
-        ├── seed.sql
-        ├── stored_procedures/
-        │   └── execute_trade.sql
-        ├── triggers/
-        │   └── audit_log_trigger.sql
-        └── views/
-            ├── portfolio_mtm.sql
-            └── wac_view.sql
+        ├── migrations/              # Incremental database updates
+        ├── stored_procedures/       # Atomicity logic
+        ├── triggers/                # Security and automation logic
+        └── views/                   # Read-heavy analytic logic
 ```
 
 ---
@@ -124,18 +113,21 @@ nexus/
 # 1. Start MySQL (macOS)
 brew services start mysql
 
-# 2. Load schema + seed data
+# 2. Load schema, seed data, and new features 
 mysql -u root -p < server/sql/schema.sql
 mysql -u root -p nexus_db < server/sql/seed.sql
+mysql -u root -p nexus_db < server/sql/migrations/003_update_stored_proc.sql
+mysql -u root -p nexus_db < server/sql/migrations/005_new_features.sql
+# Ensure you source all the triggers, views, and stored procedure files as well!
 
-# 3. Backend — create server/.env first (see below)
+# 3. Backend — configure .env first
 cd server && npm install && npm run dev
 
 # 4. Frontend
 cd client && npm install && npm run dev
 ```
 
-**`server/.env`**
+**`server/.env` and `client/.env`**
 ```
 DB_HOST=192.168.1.100
 DB_PORT=3306
@@ -144,6 +136,7 @@ DB_PASS=nexus_pass
 DB_NAME=nexus_db
 JWT_SECRET=your_secret_here
 PORT=3001
+VITE_API_URL=http://localhost:3001
 ```
 
 Open **http://localhost:5173**

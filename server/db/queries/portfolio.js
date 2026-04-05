@@ -59,3 +59,33 @@ export const getPortfolioDailyChange = async (userId) => {
     const [rows] = await pool.query(query, [userId]);
     return rows[0]?.daily_change ?? 0;
 };
+
+export const getUserPnlSummary = async () => {
+    const [rows] = await pool.query('SELECT * FROM user_pnl_summary_view ORDER BY portfolio_rank ASC');
+    return rows;
+};
+
+export const getAssetVolume = async () => {
+    const [rows] = await pool.query('SELECT * FROM asset_volume_view ORDER BY total_value_traded DESC');
+    return rows;
+};
+
+export const getUserTradeSummary = async () => {
+    const [rows] = await pool.query('SELECT * FROM user_trade_summary_view ORDER BY total_trades DESC');
+    return rows;
+};
+
+export const getRunningBalance = async (userId) => {
+    const [rows] = await pool.query('SELECT * FROM running_balance_view WHERE user_id = ? ORDER BY created_at ASC', [userId]);
+    return rows;
+};
+
+export const getUserExchangeWeight = async () => {
+    const [rows] = await pool.query('SELECT * FROM user_exchange_weight_view ORDER BY portfolio_value DESC');
+    return rows;
+};
+
+export const getOpenOrders = async () => {
+    const [rows] = await pool.query('SELECT * FROM open_orders_view ORDER BY created_at DESC');
+    return rows;
+};

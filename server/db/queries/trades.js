@@ -1,11 +1,19 @@
 import pool from '../pool.js';
 
-export const executeTradeProcedure = async (buyerId, sellerId, assetId, qty, executedPrice) => {
+export const executeTradeProcedure = async (buyOrderId, sellOrderId, assetId, qty, executedPrice) => {
     const [rows] = await pool.query(
         'CALL execute_trade(?, ?, ?, ?, ?)',
-        [buyerId, sellerId, assetId, qty, executedPrice]
+        [buyOrderId, sellOrderId, assetId, qty, executedPrice]
     );
 
+    return rows[0]?.[0] ?? null;
+};
+
+export const settlePartialTradeProcedure = async (buyOrderId, sellOrderId, assetId, availableQty, price) => {
+    const [rows] = await pool.query(
+        'CALL settle_partial_trade(?, ?, ?, ?, ?)',
+        [buyOrderId, sellOrderId, assetId, availableQty, price]
+    );
     return rows[0]?.[0] ?? null;
 };
 
@@ -15,18 +23,23 @@ export const findMatchingOrder = async (assetId, side, qty, price) => {
         ? (price ? 'AND limit_price <= ?' : '')
         : (price ? 'AND limit_price >= ?' : '');
 
+    const orderCondition = side === 'BUY'
+        ? 'ORDER BY limit_price ASC, created_at ASC'
+        : 'ORDER BY limit_price DESC, created_at ASC';
+
     const query = `
-        SELECT * FROM orders 
+        SELECT *, (qty - COALESCE(filled_qty, 0)) AS remaining_qty 
+        FROM orders 
         WHERE asset_id = ? 
         AND type = ? 
         AND status = 'OPEN'
         ${priceCondition}
-        AND qty >= ?
-        ORDER BY created_at ASC
+        AND (qty - COALESCE(filled_qty, 0)) > 0
+        ${orderCondition}
         LIMIT 1
     `;
 
-    const params = price ? [assetId, oppositeSide, price, qty] : [assetId, oppositeSide, qty];
+    const params = price ? [assetId, oppositeSide, price] : [assetId, oppositeSide];
     const [rows] = await pool.query(query, params);
     return rows[0] || null;
 };
@@ -42,8 +55,4 @@ export const createOrder = async (userId, assetId, side, orderType, qty, limitPr
 
 export const updateOrderStatus = async (orderId, status) => {
     await pool.query('UPDATE orders SET status = ? WHERE id = ?', [status, orderId]);
-};
-
-export const linkTradeToOrders = async (tradeId, buyOrderId, sellOrderId) => {
-    await pool.query('UPDATE trades SET buy_order_id = ?, sell_order_id = ? WHERE id = ?', [buyOrderId, sellOrderId, tradeId]);
 };

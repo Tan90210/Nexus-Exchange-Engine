@@ -42,4 +42,22 @@ router.get('/assets', async (req, res, next) => {
     }
 });
 
+router.get('/analytics', async (req, res, next) => {
+    try {
+        const result = await PortfolioService.getAnalytics();
+        res.status(200).json(result);
+    } catch (error) {
+        next(error);
+    }
+});
+
+router.get('/balance-history', async (req, res, next) => {
+    try {
+        const result = await PortfolioService.getRunningBalance(req.user.id);
+        res.status(200).json(result);
+    } catch (error) {
+        next(error);
+    }
+});
+
 export default router;

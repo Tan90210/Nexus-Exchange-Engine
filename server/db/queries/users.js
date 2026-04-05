@@ -30,3 +30,13 @@ export const createUser = async (email, passwordHash, name) => {
         connection.release();
     }
 };
+
+export const depositFundsProcedure = async (userId, amount) => {
+    const [rows] = await pool.query('CALL deposit_funds(?, ?)', [userId, amount]);
+    return rows[0]?.[0] ?? null;
+};
+
+export const withdrawFundsProcedure = async (userId, amount) => {
+    const [rows] = await pool.query('CALL withdraw_funds(?, ?)', [userId, amount]);
+    return rows[0]?.[0] ?? null;
+};

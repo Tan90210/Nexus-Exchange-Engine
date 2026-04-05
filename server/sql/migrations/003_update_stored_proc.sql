@@ -5,18 +5,24 @@ DROP PROCEDURE IF EXISTS execute_trade;
 DELIMITER //
 
 CREATE PROCEDURE execute_trade(
-    IN p_buyer_id INT,
-    IN p_seller_id INT,
+    IN p_buy_order_id INT,
+    IN p_sell_order_id INT,
     IN p_asset_id INT,
     IN p_qty DECIMAL(15, 4),
     IN p_executed_price DECIMAL(15, 2)
 )
 BEGIN
+    DECLARE p_buyer_id INT;
+    DECLARE p_seller_id INT;
     DECLARE v_total_cost DECIMAL(15, 2);
     DECLARE v_trade_id INT;
     DECLARE v_first_id INT;
     DECLARE v_second_id INT;
     DECLARE v_dummy INT;
+
+    -- Extract user IDs from order IDs
+    SELECT user_id INTO p_buyer_id FROM orders WHERE id = p_buy_order_id;
+    SELECT user_id INTO p_seller_id FROM orders WHERE id = p_sell_order_id;
 
     -- Error handling
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
@@ -76,11 +82,14 @@ BEGIN
     DELETE FROM holdings WHERE user_id = p_seller_id AND asset_id = p_asset_id AND quantity = 0;
 
     -- 5. Record Trade
-    -- Note: In this simulation, we insert a trade row directly.
-    -- buy_order_id and sell_order_id are NULL since the 'matching' happens in the app/proc.
+    -- We can now record the real order ids instantly because we pass them!
     INSERT INTO trades (buy_order_id, sell_order_id, asset_id, qty, executed_price)
-    VALUES (NULL, NULL, p_asset_id, p_qty, p_executed_price);
+    VALUES (p_buy_order_id, p_sell_order_id, p_asset_id, p_qty, p_executed_price);
     SET v_trade_id = LAST_INSERT_ID();
+
+    -- 5b. Update Orders
+    -- Mark orders as fully FILLED and update filled_qty
+    UPDATE orders SET status = 'FILLED', filled_qty = qty WHERE id IN (p_buy_order_id, p_sell_order_id);
 
     -- 6. Record Ledger Entries
     -- Buyer Debit (Cash)

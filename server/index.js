@@ -13,6 +13,7 @@ import portfolioRoutes from './routes/portfolio.js';
 import auditRoutes from './routes/audit.js';
 import adminRoutes from './routes/admin.js';
 import assetsRoutes from './routes/assets.js';
+import ordersRoutes from './routes/orders.js';
 
 const app = express();
 
@@ -26,6 +27,7 @@ app.use('/api/portfolio', portfolioRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/assets', assetsRoutes);
+app.use('/api/orders', ordersRoutes);
 
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date() });

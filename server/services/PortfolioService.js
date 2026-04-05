@@ -91,3 +91,31 @@ export const getAssets = async () => {
         currentPrice: parseFloat(asset.currentPrice)
     }));
 };
+
+export const getAnalytics = async () => {
+    const [
+        pnlSummary,
+        assetVolume,
+        tradeSummary,
+        exchangeWeight,
+        openOrders
+    ] = await Promise.all([
+        PortfolioQueries.getUserPnlSummary(),
+        PortfolioQueries.getAssetVolume(),
+        PortfolioQueries.getUserTradeSummary(),
+        PortfolioQueries.getUserExchangeWeight(),
+        PortfolioQueries.getOpenOrders()
+    ]);
+
+    return {
+        pnlSummary,
+        assetVolume,
+        tradeSummary,
+        exchangeWeight,
+        openOrders
+    };
+};
+
+export const getRunningBalance = async (userId) => {
+    return await PortfolioQueries.getRunningBalance(userId);
+};
