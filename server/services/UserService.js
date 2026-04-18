@@ -57,12 +57,15 @@ export const login = async (email, password) => {
 };
 
 export const deposit = async (userId, amount) => {
-    return await depositFundsProcedure(userId, amount);
+    const result = await depositFundsProcedure(userId, amount);
+    // depositFundsProcedure returns rows[0][0] from pool.query — unwrap the balance scalar
+    return result?.newBalance ?? result?.NewBalance ?? result;
 };
 
 export const withdraw = async (userId, amount) => {
     try {
-        return await withdrawFundsProcedure(userId, amount);
+        const result = await withdrawFundsProcedure(userId, amount);
+        return result?.newBalance ?? result?.NewBalance ?? result;
     } catch (error) {
         if (error.sqlState === '45000') {
             const err = new Error(error.message);

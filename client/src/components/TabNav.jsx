@@ -1,8 +1,13 @@
+import { useAuth } from '../context/useAuth'
+
 export default function TabNav({ activeTab, onTabChange }) {
+  const { user } = useAuth()
+
   const tabs = [
-    { id: 'trader', label: 'TRADER VIEW' },
-    { id: 'admin',  label: 'ADMIN VIEW'  },
-  ]
+    { id: 'trader',    label: 'TRADER VIEW',     visible: true },
+    { id: 'analytics', label: 'DB ANALYTICS',    visible: true },
+    { id: 'admin',     label: 'ADMIN / MONITOR', visible: user?.role === 'ADMIN' },
+  ].filter(t => t.visible)
 
   return (
     <nav className="flex border-b border-border bg-bg">

@@ -25,7 +25,6 @@ const tradeSchema = z.object({
  */
 router.post('/', async (req, res, next) => {
     try {
-        console.log('Trades Route - req.user:', req.user);
         const payload = tradeSchema.parse(req.body);
         const result = await TradeService.execute(req.user?.id, payload);
         res.status(200).json(result);

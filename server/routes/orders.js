@@ -2,6 +2,7 @@ import express from 'express';
 import { z } from 'zod';
 import verifyJWT from '../middleware/verifyJWT.js';
 import OrderService from '../services/OrderService.js';
+import * as OrderQueries from '../db/queries/orders.js';
 
 const router = express.Router();
 
@@ -39,6 +40,19 @@ router.get('/book/:assetId', async (req, res, next) => {
         }
         const result = await OrderService.getOrderBook(assetId);
         res.status(200).json(result);
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
+ * GET /api/orders/my
+ * Returns the current user's order history (for order management panel)
+ */
+router.get('/my', async (req, res, next) => {
+    try {
+        const orders = await OrderQueries.getUserOrders(req.user.id, 50);
+        res.status(200).json(orders);
     } catch (error) {
         next(error);
     }

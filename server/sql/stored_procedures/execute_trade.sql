@@ -1,15 +1,15 @@
 USE nexus_db;
 
-DROP PROCEDURE IF EXISTS settle_partial_trade;
+DROP PROCEDURE IF EXISTS execute_trade;
 
 DELIMITER //
 
-CREATE PROCEDURE settle_partial_trade(
-    IN p_buy_order_id  INT,
+CREATE PROCEDURE execute_trade(
+    IN p_buy_order_id INT,
     IN p_sell_order_id INT,
-    IN p_asset_id      INT,
-    IN p_available_qty DECIMAL(15, 4),
-    IN p_price         DECIMAL(15, 2)
+    IN p_asset_id INT,
+    IN p_qty DECIMAL(15, 4),
+    IN p_executed_price DECIMAL(15, 2)
 )
 BEGIN
     DECLARE v_buyer_id INT;
@@ -23,14 +23,6 @@ BEGIN
     DECLARE v_buy_reserved_cash DECIMAL(15, 2);
     DECLARE v_sell_reserved_qty DECIMAL(15, 4);
     DECLARE v_buy_limit_price DECIMAL(15, 2);
-    DECLARE v_buy_order_qty DECIMAL(15, 4);
-    DECLARE v_buy_filled_qty DECIMAL(15, 4);
-    DECLARE v_sell_order_qty DECIMAL(15, 4);
-    DECLARE v_sell_filled_qty DECIMAL(15, 4);
-    DECLARE v_buy_new_filled DECIMAL(15, 4);
-    DECLARE v_sell_new_filled DECIMAL(15, 4);
-    DECLARE v_buy_new_reserved_cash DECIMAL(15, 2);
-    DECLARE v_sell_new_reserved_qty DECIMAL(15, 4);
     DECLARE v_lock_balance DECIMAL(15, 2);
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
@@ -39,36 +31,28 @@ BEGIN
         RESIGNAL;
     END;
 
-    SET v_total_cost = p_price * p_available_qty;
+    SET v_total_cost = p_executed_price * p_qty;
 
     START TRANSACTION;
 
     SELECT
         user_id,
         COALESCE(reserved_cash, 0),
-        COALESCE(limit_price, 0),
-        qty,
-        COALESCE(filled_qty, 0)
+        COALESCE(limit_price, 0)
     INTO
         v_buyer_id,
         v_buy_reserved_cash,
-        v_buy_limit_price,
-        v_buy_order_qty,
-        v_buy_filled_qty
+        v_buy_limit_price
     FROM orders
     WHERE id = p_buy_order_id
     FOR UPDATE;
 
     SELECT
         user_id,
-        COALESCE(reserved_qty, 0),
-        qty,
-        COALESCE(filled_qty, 0)
+        COALESCE(reserved_qty, 0)
     INTO
         v_seller_id,
-        v_sell_reserved_qty,
-        v_sell_order_qty,
-        v_sell_filled_qty
+        v_sell_reserved_qty
     FROM orders
     WHERE id = p_sell_order_id
     FOR UPDATE;
@@ -114,7 +98,7 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'INSUFFICIENT_FUNDS';
     END IF;
 
-    IF COALESCE(v_seller_available_qty, 0) < p_available_qty THEN
+    IF COALESCE(v_seller_available_qty, 0) < p_qty THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'INSUFFICIENT_HOLDINGS';
     END IF;
 
@@ -129,14 +113,14 @@ BEGIN
     WHERE user_id = v_seller_id;
 
     INSERT INTO holdings (user_id, asset_id, quantity, avg_cost_basis)
-    VALUES (v_buyer_id, p_asset_id, p_available_qty, p_price)
+    VALUES (v_buyer_id, p_asset_id, p_qty, p_executed_price)
     ON DUPLICATE KEY UPDATE
-        avg_cost_basis = (avg_cost_basis * quantity + v_total_cost) / (quantity + p_available_qty),
-        quantity = quantity + p_available_qty;
+        avg_cost_basis = (avg_cost_basis * quantity + v_total_cost) / (quantity + p_qty),
+        quantity = quantity + p_qty;
 
     IF v_sell_reserved_qty = 0 THEN
         UPDATE holdings
-        SET quantity = quantity - p_available_qty
+        SET quantity = quantity - p_qty
         WHERE user_id = v_seller_id AND asset_id = p_asset_id;
 
         DELETE FROM holdings
@@ -144,7 +128,7 @@ BEGIN
     END IF;
 
     INSERT INTO trades (buy_order_id, sell_order_id, asset_id, qty, executed_price)
-    VALUES (p_buy_order_id, p_sell_order_id, p_asset_id, p_available_qty, p_price);
+    VALUES (p_buy_order_id, p_sell_order_id, p_asset_id, p_qty, p_executed_price);
     SET v_trade_id = LAST_INSERT_ID();
 
     INSERT INTO ledger_entries (trade_id, user_id, entry_type, amount, asset_id)
@@ -153,38 +137,23 @@ BEGIN
     INSERT INTO ledger_entries (trade_id, user_id, entry_type, amount, asset_id)
     VALUES (v_trade_id, v_seller_id, 'CREDIT', v_total_cost, p_asset_id);
 
-    SET v_buy_new_filled = v_buy_filled_qty + p_available_qty;
-    SET v_sell_new_filled = v_sell_filled_qty + p_available_qty;
-
-    IF v_buy_reserved_cash > 0 THEN
-        SET v_buy_new_reserved_cash = GREATEST(v_buy_reserved_cash - (p_available_qty * v_buy_limit_price), 0);
-    ELSE
-        SET v_buy_new_reserved_cash = 0;
-    END IF;
-
-    IF v_sell_reserved_qty > 0 THEN
-        SET v_sell_new_reserved_qty = GREATEST(v_sell_reserved_qty - p_available_qty, 0);
-    ELSE
-        SET v_sell_new_reserved_qty = 0;
-    END IF;
-
     UPDATE orders
     SET
-        filled_qty = v_buy_new_filled,
-        status = IF(v_buy_new_filled >= v_buy_order_qty, 'FILLED', 'OPEN'),
-        reserved_cash = v_buy_new_reserved_cash
+        status = 'FILLED',
+        filled_qty = qty,
+        reserved_cash = 0
     WHERE id = p_buy_order_id;
 
     UPDATE orders
     SET
-        filled_qty = v_sell_new_filled,
-        status = IF(v_sell_new_filled >= v_sell_order_qty, 'FILLED', 'OPEN'),
-        reserved_qty = v_sell_new_reserved_qty
+        status = 'FILLED',
+        filled_qty = qty,
+        reserved_qty = 0
     WHERE id = p_sell_order_id;
 
     COMMIT;
 
-    SELECT v_trade_id AS tradeId, p_available_qty AS executedQty, p_price AS executedPrice;
+    SELECT v_trade_id AS tradeId;
 END //
 
 DELIMITER ;

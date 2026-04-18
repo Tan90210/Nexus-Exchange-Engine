@@ -109,25 +109,50 @@ nexus/
 
 ## Running Locally
 
+### 1. Database setup
+
 ```bash
-# 1. Start MySQL (macOS)
-brew services start mysql
+# Start MySQL
+brew services start mysql   # macOS
+# net start MySQL           # Windows
 
-# 2. Load schema, seed data, and new features 
+# Load everything in order (recommended: use root or nexus_user)
 mysql -u root -p < server/sql/schema.sql
+
+# Stored procedures
+mysql -u root -p nexus_db < server/sql/stored_procedures/execute_trade.sql
+mysql -u root -p nexus_db < server/sql/stored_procedures/settle_partial_trade.sql
+mysql -u root -p nexus_db < server/sql/stored_procedures/cancel_order.sql
+mysql -u root -p nexus_db < server/sql/stored_procedures/deposit_funds.sql
+mysql -u root -p nexus_db < server/sql/stored_procedures/withdraw_funds.sql
+mysql -u root -p nexus_db < server/sql/stored_procedures/get_order_book.sql
+
+# Views
+mysql -u root -p nexus_db < server/sql/views/portfolio_mtm.sql
+mysql -u root -p nexus_db < server/sql/views/wac_view.sql
+mysql -u root -p nexus_db < server/sql/views/asset_volume_view.sql
+mysql -u root -p nexus_db < server/sql/views/open_orders_view.sql
+mysql -u root -p nexus_db < server/sql/views/user_pnl_summary_view.sql
+mysql -u root -p nexus_db < server/sql/views/user_trade_summary_view.sql
+mysql -u root -p nexus_db < server/sql/views/user_exchange_weight_view.sql
+mysql -u root -p nexus_db < server/sql/views/running_balance_view.sql
+
+# Triggers
+mysql -u root -p nexus_db < server/sql/triggers/audit_log_trigger.sql
+mysql -u root -p nexus_db < server/sql/triggers/prevent_audit_tampering.sql
+mysql -u root -p nexus_db < server/sql/triggers/price_history_trigger.sql
+
+# Seed data (4 users, 5 assets, 12 orders, price history)
 mysql -u root -p nexus_db < server/sql/seed.sql
-mysql -u root -p nexus_db < server/sql/migrations/003_update_stored_proc.sql
-mysql -u root -p nexus_db < server/sql/migrations/005_new_features.sql
-# Ensure you source all the triggers, views, and stored procedure files as well!
-
-# 3. Backend — configure .env first
-cd server && npm install && npm run dev
-
-# 4. Frontend
-cd client && npm install && npm run dev
 ```
 
-**`server/.env` and `client/.env`**
+> **Note:** Do NOT run the `migrations/` folder on a fresh install — `schema.sql` already incorporates all migrations.
+
+---
+
+### 2. Environment
+
+**`server/.env`**
 ```
 DB_HOST=192.168.1.100
 DB_PORT=3306
@@ -136,10 +161,39 @@ DB_PASS=nexus_pass
 DB_NAME=nexus_db
 JWT_SECRET=your_secret_here
 PORT=3001
+```
+
+**`client/.env`**
+```
 VITE_API_URL=http://localhost:3001
 ```
 
+---
+
+### 3. Start services
+
+```bash
+# Backend (port 3001)
+cd server && npm install && npm run dev
+
+# Frontend (port 5173)
+cd client && npm install && npm run dev
+```
+
 Open **http://localhost:5173**
+
+---
+
+### Demo accounts (password: `password123`)
+
+| Email | Name | Role |
+|-------|------|------|
+| arjun@nexus.io | Arjun Mehta | **ADMIN** |
+| priya@nexus.io | Priya Sharma | USER |
+| rohan@nexus.io | Rohan Das | USER |
+| kavya@nexus.io | Kavya Nair | USER |
+
+> See **[DEMO_GUIDE.md](./DEMO_GUIDE.md)** for the full demo walkthrough, ACID test procedure, and professor Q&A cheat sheet.
 
 ---
 

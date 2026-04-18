@@ -56,6 +56,14 @@
     border: 1px solid #1f1f1f;
   }
 
+  .surface-lighter {
+    background-color: #181818;
+    border: 1px solid #252525;
+  }
+
+  .bg-bg { background-color: #0a0a0a; }
+  .bg-surface { background-color: #111111; }
+
   .text-profit { color: #22c55e; }
   .text-loss   { color: #ef4444; }
   .text-info   { color: #3b82f6; }

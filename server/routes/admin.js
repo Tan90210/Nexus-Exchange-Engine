@@ -4,11 +4,21 @@ import verifyJWT from '../middleware/verifyJWT.js';
 import pool from '../db/pool.js';
 import { deposit, withdraw } from '../services/UserService.js';
 import { z } from 'zod';
+import { getAllUsers } from '../db/queries/users.js';
 
 const router = express.Router();
 
 router.use(verifyJWT);
 router.use(verifyAdmin);
+
+router.get('/users', async (req, res, next) => {
+    try {
+        const users = await getAllUsers();
+        res.json(users);
+    } catch (error) {
+        next(error);
+    }
+});
 
 /**
  * GET /api/admin/stats
@@ -93,6 +103,43 @@ router.post('/withdraw', async (req, res, next) => {
         if (error instanceof z.ZodError) {
             return res.status(400).json({ error: error.issues[0]?.message || 'Invalid request' });
         }
+        next(error);
+    }
+});
+
+/**
+ * PATCH /api/admin/assets/:id/price
+ * Updates an asset's current price — fires the price_history_trigger automatically.
+ */
+const priceSchema = z.object({ price: z.number().positive() });
+
+router.patch('/assets/:id/price', async (req, res, next) => {
+    try {
+        const assetId = parseInt(req.params.id, 10);
+        if (isNaN(assetId)) return res.status(400).json({ error: 'Invalid asset ID' });
+        const { price } = priceSchema.parse(req.body);
+        const { updateAssetPrice } = await import('../services/PortfolioService.js');
+        const updated = await updateAssetPrice(assetId, price);
+        if (!updated) return res.status(404).json({ error: 'Asset not found' });
+        res.json({ success: true, asset: updated, message: 'Price updated — price_history_trigger fired' });
+    } catch (error) {
+        if (error instanceof z.ZodError) return res.status(400).json({ error: 'Price must be a positive number' });
+        next(error);
+    }
+});
+
+/**
+ * GET /api/admin/balance-history/:userId
+ * Returns running balance for any user (admin view — not restricted to own account).
+ */
+router.get('/balance-history/:userId', async (req, res, next) => {
+    try {
+        const userId = parseInt(req.params.userId, 10);
+        if (isNaN(userId)) return res.status(400).json({ error: 'Invalid userId' });
+        const { getRunningBalance } = await import('../services/PortfolioService.js');
+        const rows = await getRunningBalance(userId);
+        res.json(rows);
+    } catch (error) {
         next(error);
     }
 });

@@ -8,15 +8,15 @@ class AuditService {
     /**
      * Retrieves paginated audit logs joined with trade and asset details.
      */
-    static async getLogs(page = 1, limit = 20) {
+    static async getLogs(page = 1, limit = 20, filters = {}) {
         const safePage = Number(page) > 0 ? Number(page) : 1;
         const safeLimit = Number(limit) > 0 ? Number(limit) : 20;
         const offset = (safePage - 1) * safeLimit;
 
         try {
             const [total, entries] = await Promise.all([
-                getAuditLogCount(),
-                getAuditLogs(safeLimit, offset)
+                getAuditLogCount(filters),
+                getAuditLogs(safeLimit, offset, filters)
             ]);
 
             return { total, entries };
@@ -29,9 +29,9 @@ class AuditService {
     /**
      * Retrieves recent trade history for a specific user.
      */
-    static async getUserTradeHistory(userId, limit = 50) {
+    static async getUserTradeHistory(userId, limit = 50, filters = {}) {
         try {
-            return await getUserTradeHistoryQuery(userId, Number(limit));
+            return await getUserTradeHistoryQuery(userId, Number(limit), filters);
         } catch (error) {
             console.error('AuditService Error:', error);
             throw error;

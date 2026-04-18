@@ -14,6 +14,8 @@ CREATE PROCEDURE withdraw_funds(
 )
 BEGIN
     DECLARE v_balance DECIMAL(15, 2);
+    DECLARE v_reserved_cash DECIMAL(15, 2);
+    DECLARE v_available_balance DECIMAL(15, 2);
 
     DECLARE EXIT HANDLER FOR SQLEXCEPTION
     BEGIN
@@ -31,7 +33,22 @@ BEGIN
     SELECT balance INTO v_balance
         FROM wallets WHERE user_id = p_user_id FOR UPDATE;
 
-    IF v_balance < p_amount THEN
+    SELECT id
+    FROM orders
+    WHERE user_id = p_user_id
+      AND type = 'BUY'
+      AND status = 'OPEN'
+    FOR UPDATE;
+
+    SELECT COALESCE(SUM(reserved_cash), 0) INTO v_reserved_cash
+    FROM orders
+    WHERE user_id = p_user_id
+      AND type = 'BUY'
+      AND status = 'OPEN';
+
+    SET v_available_balance = v_balance - v_reserved_cash;
+
+    IF v_available_balance < p_amount THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'INSUFFICIENT_FUNDS';
     END IF;
 

@@ -1,12 +1,59 @@
 import pool from '../pool.js';
 
 export const getPortfolioMtm = async (userId) => {
-    const [rows] = await pool.query('SELECT * FROM portfolio_mtm WHERE user_id = ?', [userId]);
+    const [rows] = await pool.query(
+        `
+        SELECT
+            pm.user_id,
+            pm.asset_id,
+            pm.symbol,
+            pm.name,
+            pm.quantity,
+            pm.avg_cost_basis,
+            pm.current_price,
+            pm.market_value,
+            pm.book_value,
+            pm.unrealized_pnl,
+            pm.pnl_pct,
+            GREATEST(pm.quantity - COALESCE(reservations.reserved_qty, 0), 0) AS available_quantity
+        FROM portfolio_mtm pm
+        LEFT JOIN (
+            SELECT
+                user_id,
+                asset_id,
+                SUM(reserved_qty) AS reserved_qty
+            FROM orders
+            WHERE status = 'OPEN' AND type = 'SELL'
+            GROUP BY user_id, asset_id
+        ) reservations
+            ON reservations.user_id = pm.user_id
+           AND reservations.asset_id = pm.asset_id
+        WHERE pm.user_id = ?
+        `,
+        [userId]
+    );
     return rows;
 };
 
 export const getCashBalance = async (userId) => {
-    const [rows] = await pool.query('SELECT balance FROM wallets WHERE user_id = ?', [userId]);
+    const [rows] = await pool.query(
+        `
+        SELECT
+            GREATEST(
+                w.balance - COALESCE((
+                    SELECT SUM(o.reserved_cash)
+                    FROM orders o
+                    WHERE o.user_id = w.user_id
+                      AND o.status = 'OPEN'
+                      AND o.type = 'BUY'
+                ), 0),
+                0
+            ) AS balance
+        FROM wallets w
+        WHERE w.user_id = ?
+        `,
+        [userId]
+    );
     return rows.length ? rows[0].balance : 0;
 };
 
@@ -19,7 +66,7 @@ export const getPriceHistory = async (assetId, days) => {
 };
 
 export const getAssetById = async (assetId) => {
-    const [rows] = await pool.query('SELECT symbol, name FROM assets WHERE id = ?', [assetId]);
+    const [rows] = await pool.query('SELECT symbol, name, current_price FROM assets WHERE id = ?', [assetId]);
     return rows.length ? rows[0] : null;
 };
 
@@ -88,4 +135,23 @@ export const getUserExchangeWeight = async () => {
 export const getOpenOrders = async () => {
     const [rows] = await pool.query('SELECT * FROM open_orders_view ORDER BY created_at DESC');
     return rows;
+};
+
+export const getWacData = async () => {
+    const [rows] = await pool.query(`
+        SELECT wv.*, u.name AS user_name
+        FROM wac_view wv
+        JOIN users u ON u.id = wv.user_id
+        ORDER BY wv.user_id, wv.symbol ASC
+    `);
+    return rows;
+};
+
+export const updateAssetPrice = async (assetId, newPrice) => {
+    await pool.query(
+        'UPDATE assets SET current_price = ? WHERE id = ?',
+        [newPrice, assetId]
+    );
+    const [rows] = await pool.query('SELECT id, symbol, name, current_price FROM assets WHERE id = ?', [assetId]);
+    return rows[0] ?? null;
 };

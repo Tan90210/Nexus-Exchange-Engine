@@ -18,12 +18,17 @@ export default function TopBar() {
         <span className="mono text-xs text-text-muted tracking-[0.25em] hidden sm:block">EXCHANGE ENGINE</span>
       </div>
 
-      {/* Right: User + Logout */}
-      <div className="flex items-center gap-5">
+      {/* Right: User + role badge + Logout */}
+      <div className="flex items-center gap-3">
         {user && (
-          <span className="mono text-xs text-text-muted hidden sm:block">
-            {user.name.toUpperCase()}
-          </span>
+          <>
+            <span className="mono text-xs text-text-muted hidden sm:block">
+              {user.name.toUpperCase()}
+            </span>
+            {user.role === 'ADMIN' && (
+              <span className="badge-warn hidden sm:inline">ADMIN</span>
+            )}
+          </>
         )}
         <button
           onClick={handleLogout}

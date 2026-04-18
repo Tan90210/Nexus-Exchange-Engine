@@ -1,4 +1,4 @@
-const API_URL = 'http://127.0.0.1:3002/api';
+const API_URL = 'http://127.0.0.1:3001/api';
 
 async function verifyAll() {
     console.log('🚀 Starting Nexus Exchange E2E Verification...');

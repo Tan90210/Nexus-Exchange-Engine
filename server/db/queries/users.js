@@ -5,6 +5,22 @@ export const findUserByEmail = async (email) => {
     return rows.length ? rows[0] : null;
 };
 
+export const getAllUsers = async () => {
+    const [rows] = await pool.query(
+        `SELECT
+            u.id,
+            u.email,
+            u.name,
+            u.role,
+            u.created_at,
+            COALESCE(w.balance, 0) AS balance
+         FROM users u
+         LEFT JOIN wallets w ON w.user_id = u.id
+         ORDER BY u.id ASC`
+    );
+    return rows;
+};
+
 export const createUser = async (email, passwordHash, name) => {
     const connection = await pool.getConnection();
     try {

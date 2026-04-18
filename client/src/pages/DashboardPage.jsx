@@ -9,7 +9,10 @@ import PriceChart from '../components/PriceChart'
 import OrderForm from '../components/OrderForm'
 import OrderPreview from '../components/OrderPreview'
 import TradeHistoryLog from '../components/TradeHistoryLog'
+import OrderBook from '../components/OrderBook'
+import OpenOrdersPanel from '../components/OpenOrdersPanel'
 import AdminView from '../components/AdminView'
+import AnalyticsView from '../components/AnalyticsView'
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState('trader')
@@ -51,9 +54,10 @@ export default function DashboardPage() {
         <TabNav activeTab={activeTab} onTabChange={setActiveTab} />
 
         <main className="p-6 space-y-6">
-          {activeTab === 'trader' ? (
+          {/* ── TRADER TAB ── */}
+          {activeTab === 'trader' && (
             <>
-              {/* Summary bar — uses its own internal query (same cache key, no extra request) */}
+              {/* Summary bar */}
               <PortfolioSummaryBar />
 
               {/* Holdings + Chart (2/3 + 1/3) */}
@@ -77,7 +81,6 @@ export default function DashboardPage() {
                 <OrderForm
                   assets={assets}
                   isLoading={isLoading}
-                  // Controlled state — lifted up for live OrderPreview
                   side={orderSide}
                   orderType={orderType}
                   assetId={orderAssetId}
@@ -105,11 +108,22 @@ export default function DashboardPage() {
                 />
               </div>
 
+              {/* Order Book + Open Orders side-by-side */}
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <OrderBook selectedAssetId={selectedAssetId} assets={assets} />
+                <OpenOrdersPanel />
+              </div>
+
+              {/* Trade History */}
               <TradeHistoryLog />
             </>
-          ) : (
-            <AdminView />
           )}
+
+          {/* ── ANALYTICS TAB ── */}
+          {activeTab === 'analytics' && <AnalyticsView />}
+
+          {/* ── ADMIN TAB ── */}
+          {activeTab === 'admin' && <AdminView />}
         </main>
       </div>
     </div>

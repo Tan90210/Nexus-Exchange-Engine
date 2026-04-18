@@ -24,6 +24,7 @@ export const getPortfolio = async (userId) => {
             symbol: h.symbol,
             name: h.name,
             qty: parseFloat(h.quantity),
+            availableQty: parseFloat(h.available_quantity ?? h.quantity),
             avgCostBasis: parseFloat(h.avg_cost_basis),
             currentPrice: parseFloat(h.current_price),
             marketValue: marketValue,
@@ -98,13 +99,15 @@ export const getAnalytics = async () => {
         assetVolume,
         tradeSummary,
         exchangeWeight,
-        openOrders
+        openOrders,
+        wacData
     ] = await Promise.all([
         PortfolioQueries.getUserPnlSummary(),
         PortfolioQueries.getAssetVolume(),
         PortfolioQueries.getUserTradeSummary(),
         PortfolioQueries.getUserExchangeWeight(),
-        PortfolioQueries.getOpenOrders()
+        PortfolioQueries.getOpenOrders(),
+        PortfolioQueries.getWacData()
     ]);
 
     return {
@@ -112,10 +115,15 @@ export const getAnalytics = async () => {
         assetVolume,
         tradeSummary,
         exchangeWeight,
-        openOrders
+        openOrders,
+        wacData
     };
 };
 
 export const getRunningBalance = async (userId) => {
     return await PortfolioQueries.getRunningBalance(userId);
+};
+
+export const updateAssetPrice = async (assetId, newPrice) => {
+    return await PortfolioQueries.updateAssetPrice(assetId, newPrice);
 };

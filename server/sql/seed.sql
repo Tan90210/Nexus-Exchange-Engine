@@ -9,11 +9,12 @@ INSERT INTO assets (id, symbol, name, current_price) VALUES
 (5, 'WIPRO', 'Wipro Ltd', 472.15);
 
 -- 2. Insert Users (Password: "password123")
-INSERT INTO users (id, name, email, password_hash) VALUES
-(1, 'Arjun Mehta', 'arjun@nexus.io', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi'),
-(2, 'Priya Sharma', 'priya@nexus.io', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi'),
-(3, 'Rohan Das', 'rohan@nexus.io', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi'),
-(4, 'Kavya Nair', 'kavya@nexus.io', '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi');
+-- Arjun is the ADMIN user — can access the Admin panel on the dashboard.
+INSERT INTO users (id, name, email, password_hash, role) VALUES
+(1, 'Arjun Mehta', 'arjun@nexus.io', '$2b$10$NHKib.ZllJl68Zat1zJqKOMQSIa2j2/SIlaDqoKelH4epiGXEYzoC', 'ADMIN'),
+(2, 'Priya Sharma', 'priya@nexus.io', '$2b$10$NHKib.ZllJl68Zat1zJqKOMQSIa2j2/SIlaDqoKelH4epiGXEYzoC', 'USER'),
+(3, 'Rohan Das', 'rohan@nexus.io', '$2b$10$NHKib.ZllJl68Zat1zJqKOMQSIa2j2/SIlaDqoKelH4epiGXEYzoC', 'USER'),
+(4, 'Kavya Nair', 'kavya@nexus.io', '$2b$10$NHKib.ZllJl68Zat1zJqKOMQSIa2j2/SIlaDqoKelH4epiGXEYzoC', 'USER');
 
 -- 3. Insert Wallets
 INSERT INTO wallets (user_id, balance) VALUES
@@ -42,10 +43,11 @@ INSERT INTO holdings (user_id, asset_id, quantity, avg_cost_basis) VALUES
 (3, 3, 112, 1691.79),
 (3, 5, 200, 490.00);
 
--- Kavya (user 4): HDFC 80 (avg 1600), TCS 30 (avg 3900)
+-- Kavya (user 4): HDFC 80 (avg 1600), TCS 30 (avg 3900), WIPRO 100 (avg 465) — backs open SELL order 8
 INSERT INTO holdings (user_id, asset_id, quantity, avg_cost_basis) VALUES
 (4, 4, 80, 1600.00),
-(4, 2, 30, 3900.00);
+(4, 2, 30, 3900.00),
+(4, 5, 100, 465.00);
 
 -- 5. Insert Price History (Simulating past 14 days)
 
@@ -135,16 +137,34 @@ INSERT INTO price_history (asset_id, price, recorded_at) VALUES
 (5, 472.15, DATE_SUB(CURDATE(), INTERVAL 1 DAY));
 
 -- 6. Insert Sample Orders
-INSERT INTO orders (id, user_id, asset_id, type, order_type, qty, limit_price, status, created_at) VALUES
-(1, 1, 1, 'BUY', 'MARKET', 10, NULL, 'FILLED', DATE_SUB(NOW(), INTERVAL 3 HOUR)),
-(2, 2, 2, 'SELL', 'LIMIT', 5, 3895.00, 'FILLED', DATE_SUB(NOW(), INTERVAL 2 HOUR)),
-(3, 3, 3, 'BUY', 'MARKET', 12, NULL, 'FILLED', DATE_SUB(NOW(), INTERVAL 90 MINUTE));
+-- Historical FILLED orders (power the trade history & audit log)
+INSERT INTO orders (id, user_id, asset_id, type, order_type, qty, filled_qty, reserved_cash, reserved_qty, limit_price, status, created_at) VALUES
+(1, 1, 1, 'BUY',  'MARKET', 10, 10, 0, 0, NULL,    'FILLED', DATE_SUB(NOW(), INTERVAL 3 HOUR)),
+(2, 2, 2, 'SELL', 'LIMIT',  5,  5, 0, 0, 3895.00, 'FILLED', DATE_SUB(NOW(), INTERVAL 2 HOUR)),
+(3, 3, 3, 'BUY',  'MARKET', 12, 12, 0, 0, NULL,    'FILLED', DATE_SUB(NOW(), INTERVAL 90 MINUTE));
 
--- 7. Insert Sample Trades
+-- OPEN LIMIT orders (power the live order book + allow MARKET orders to match immediately)
+-- SELL side — users with holdings offering shares
+INSERT INTO orders (id, user_id, asset_id, type, order_type, qty, filled_qty, reserved_cash, reserved_qty, limit_price, status, created_at) VALUES
+(4,  2, 1, 'SELL', 'LIMIT', 20, 0, 0, 20, 2590.00, 'OPEN', DATE_SUB(NOW(), INTERVAL 30 MINUTE)),  -- Priya SELL RELI
+(5,  2, 2, 'SELL', 'LIMIT', 15, 0, 0, 15, 3920.00, 'OPEN', DATE_SUB(NOW(), INTERVAL 25 MINUTE)),  -- Priya SELL TCS
+(6,  3, 3, 'SELL', 'LIMIT', 25, 0, 0, 25, 1635.00, 'OPEN', DATE_SUB(NOW(), INTERVAL 20 MINUTE)),  -- Rohan SELL INFY
+(7,  4, 4, 'SELL', 'LIMIT', 18, 0, 0, 18, 1610.00, 'OPEN', DATE_SUB(NOW(), INTERVAL 15 MINUTE)),  -- Kavya SELL HDFC
+(8,  4, 5, 'SELL', 'LIMIT', 40, 0, 0, 40, 475.00, 'OPEN', DATE_SUB(NOW(), INTERVAL 10 MINUTE));   -- Kavya SELL WIPRO
+
+-- BUY side — users wanting to buy (powers the bid side of the order book)
+INSERT INTO orders (id, user_id, asset_id, type, order_type, qty, filled_qty, reserved_cash, reserved_qty, limit_price, status, created_at) VALUES
+(9,  1, 2, 'BUY', 'LIMIT', 10, 0, 38700, 0, 3870.00, 'OPEN', DATE_SUB(NOW(), INTERVAL 28 MINUTE)),  -- Arjun BUY TCS
+(10, 3, 4, 'BUY', 'LIMIT', 12, 0, 19080, 0, 1590.00, 'OPEN', DATE_SUB(NOW(), INTERVAL 22 MINUTE)),  -- Rohan BUY HDFC
+(11, 4, 3, 'BUY', 'LIMIT', 8,  0, 12880, 0, 1610.00, 'OPEN', DATE_SUB(NOW(), INTERVAL 18 MINUTE)),  -- Kavya BUY INFY
+(12, 1, 5, 'BUY', 'LIMIT', 50, 0, 23100, 0, 462.00, 'OPEN', DATE_SUB(NOW(), INTERVAL 8 MINUTE));    -- Arjun BUY WIPRO
+
+-- 7. Insert Sample Trades (reference FILLED orders above for audit trail)
+-- Schema now has nullable buy/sell order IDs so NULL is valid here
 INSERT INTO trades (id, buy_order_id, sell_order_id, asset_id, qty, executed_price, executed_at) VALUES
 (1, 1, NULL, 1, 10, 2581.50, DATE_SUB(NOW(), INTERVAL 3 HOUR)),
-(2, NULL, 2, 2, 5, 3895.00, DATE_SUB(NOW(), INTERVAL 2 HOUR)),
-(3, 3, NULL, 3, 12, 1623.40, DATE_SUB(NOW(), INTERVAL 90 MINUTE));
+(2, NULL, 2,  2, 5,  3895.00, DATE_SUB(NOW(), INTERVAL 2 HOUR)),
+(3, 3,   NULL, 3, 12, 1623.40, DATE_SUB(NOW(), INTERVAL 90 MINUTE));
 
 -- 8. Insert Sample Ledger Entries
 INSERT INTO ledger_entries (trade_id, user_id, entry_type, amount, asset_id, created_at) VALUES

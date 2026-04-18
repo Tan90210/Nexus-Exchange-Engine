@@ -45,12 +45,92 @@ export const findMatchingOrder = async (assetId, side, qty, price) => {
 };
 
 export const createOrder = async (userId, assetId, side, orderType, qty, limitPrice) => {
-    console.log('createOrder Debug - userId:', userId, 'assetId:', assetId);
-    const [result] = await pool.query(
-        'INSERT INTO orders (user_id, asset_id, type, order_type, qty, limit_price, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [userId, assetId, side, orderType, qty, limitPrice, 'OPEN']
-    );
-    return result.insertId;
+    const connection = await pool.getConnection();
+
+    try {
+        await connection.beginTransaction();
+
+        let reservedCash = 0;
+        let reservedQty = 0;
+
+        if (orderType === 'LIMIT') {
+            if (side === 'BUY') {
+                reservedCash = Number(qty) * Number(limitPrice || 0);
+
+                const [walletRows] = await connection.query(
+                    'SELECT balance FROM wallets WHERE user_id = ? FOR UPDATE',
+                    [userId]
+                );
+                const wallet = walletRows[0];
+
+                await connection.query(
+                    `SELECT id
+                     FROM orders
+                     WHERE user_id = ? AND type = 'BUY' AND status = 'OPEN'
+                     FOR UPDATE`,
+                    [userId]
+                );
+
+                const [reservationRows] = await connection.query(
+                    `SELECT COALESCE(SUM(reserved_cash), 0) AS reserved_cash
+                     FROM orders
+                     WHERE user_id = ? AND type = 'BUY' AND status = 'OPEN'`,
+                    [userId]
+                );
+
+                const availableCash = Number(wallet?.balance || 0) - Number(reservationRows[0]?.reserved_cash || 0);
+                if (availableCash < reservedCash) {
+                    const error = new Error('INSUFFICIENT_FUNDS');
+                    error.sqlState = '45000';
+                    throw error;
+                }
+            } else if (side === 'SELL') {
+                reservedQty = Number(qty);
+
+                const [holdingRows] = await connection.query(
+                    'SELECT quantity FROM holdings WHERE user_id = ? AND asset_id = ? FOR UPDATE',
+                    [userId, assetId]
+                );
+
+                await connection.query(
+                    `SELECT id
+                     FROM orders
+                     WHERE user_id = ? AND asset_id = ? AND type = 'SELL' AND status = 'OPEN'
+                     FOR UPDATE`,
+                    [userId, assetId]
+                );
+
+                const [reservationRows] = await connection.query(
+                    `SELECT COALESCE(SUM(reserved_qty), 0) AS reserved_qty
+                     FROM orders
+                     WHERE user_id = ? AND asset_id = ? AND type = 'SELL' AND status = 'OPEN'`,
+                    [userId, assetId]
+                );
+
+                const availableQty = Number(holdingRows[0]?.quantity || 0) - Number(reservationRows[0]?.reserved_qty || 0);
+                if (availableQty < reservedQty) {
+                    const error = new Error('INSUFFICIENT_HOLDINGS');
+                    error.sqlState = '45000';
+                    throw error;
+                }
+            }
+        }
+
+        const [result] = await connection.query(
+            `INSERT INTO orders
+                (user_id, asset_id, type, order_type, qty, filled_qty, reserved_cash, reserved_qty, limit_price, status)
+             VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
+            [userId, assetId, side, orderType, qty, reservedCash, reservedQty, limitPrice, 'OPEN']
+        );
+
+        await connection.commit();
+        return result.insertId;
+    } catch (error) {
+        await connection.rollback();
+        throw error;
+    } finally {
+        connection.release();
+    }
 };
 
 export const updateOrderStatus = async (orderId, status) => {

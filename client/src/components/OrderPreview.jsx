@@ -98,7 +98,7 @@ export default function OrderPreview({
                 ? '—'
                 : isBuy
                 ? fmt(portfolio.cashBalance)
-                : `${holding?.qty ?? 0} shares`}
+                : `${holding?.availableQty ?? holding?.qty ?? 0} shares`}
             </span>
           </div>
         </div>

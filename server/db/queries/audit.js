@@ -1,11 +1,58 @@
 import pool from '../pool.js';
 
-export const getAuditLogCount = async () => {
-    const [rows] = await pool.query('SELECT COUNT(*) AS total FROM audit_log');
+const buildAuditWhereClause = (filters = {}) => {
+    const conditions = [];
+    const params = [];
+
+    if (filters.userId) {
+        conditions.push('le.user_id = ?');
+        params.push(filters.userId);
+    }
+
+    if (filters.assetSymbol) {
+        conditions.push('a.symbol = ?');
+        params.push(filters.assetSymbol);
+    }
+
+    if (filters.dateFrom) {
+        conditions.push('t.executed_at >= ?');
+        params.push(filters.dateFrom);
+    }
+
+    if (filters.dateTo) {
+        conditions.push('t.executed_at <= ?');
+        params.push(filters.dateTo);
+    }
+
+    return {
+        whereClause: conditions.length ? `WHERE ${conditions.join(' AND ')}` : '',
+        params
+    };
+};
+
+export const getAuditLogCount = async (filters = {}) => {
+    const { whereClause, params } = buildAuditWhereClause(filters);
+    const query = `
+        SELECT COUNT(*) AS total
+        FROM audit_log al
+        JOIN trades t ON al.trade_id = t.id
+        JOIN assets a ON t.asset_id = a.id
+        LEFT JOIN ledger_entries le ON le.id = (
+            SELECT sub.id
+            FROM ledger_entries sub
+            WHERE sub.trade_id = t.id
+            ORDER BY sub.id ASC
+            LIMIT 1
+        )
+        ${whereClause}
+    `;
+
+    const [rows] = await pool.query(query, params);
     return rows[0]?.total ?? 0;
 };
 
-export const getAuditLogs = async (limit, offset) => {
+export const getAuditLogs = async (limit, offset, filters = {}) => {
+    const { whereClause, params } = buildAuditWhereClause(filters);
     const query = `
         SELECT
             al.id AS id,
@@ -20,7 +67,12 @@ export const getAuditLogs = async (limit, offset) => {
             t.qty AS qty,
             t.executed_price AS price,
             al.tx_hash AS txHash,
-            TRUE AS verified
+            (
+                al.tx_hash = SHA2(
+                    CONCAT(t.id, '|', t.asset_id, '|', t.qty, '|', t.executed_price, '|', t.executed_at),
+                    512
+                )
+            ) AS verified
         FROM audit_log al
         JOIN trades t ON al.trade_id = t.id
         JOIN assets a ON t.asset_id = a.id
@@ -31,15 +83,34 @@ export const getAuditLogs = async (limit, offset) => {
             ORDER BY sub.id ASC
             LIMIT 1
         )
+        ${whereClause}
         ORDER BY al.created_at DESC
         LIMIT ? OFFSET ?
     `;
 
-    const [rows] = await pool.query(query, [limit, offset]);
+    const [rows] = await pool.query(query, [...params, limit, offset]);
     return rows;
 };
 
-export const getUserTradeHistory = async (userId, limit) => {
+export const getUserTradeHistory = async (userId, limit, filters = {}) => {
+    const conditions = ['le.user_id = ?'];
+    const params = [userId];
+
+    if (filters.assetSymbol) {
+        conditions.push('a.symbol = ?');
+        params.push(filters.assetSymbol);
+    }
+
+    if (filters.dateFrom) {
+        conditions.push('t.executed_at >= ?');
+        params.push(filters.dateFrom);
+    }
+
+    if (filters.dateTo) {
+        conditions.push('t.executed_at <= ?');
+        params.push(filters.dateTo);
+    }
+
     const query = `
         SELECT
             t.id,
@@ -52,11 +123,11 @@ export const getUserTradeHistory = async (userId, limit) => {
         FROM trades t
         JOIN assets a ON t.asset_id = a.id
         JOIN ledger_entries le ON t.id = le.trade_id
-        WHERE le.user_id = ?
+        WHERE ${conditions.join(' AND ')}
         ORDER BY t.executed_at DESC
         LIMIT ?
     `;
 
-    const [rows] = await pool.query(query, [userId, limit]);
+    const [rows] = await pool.query(query, [...params, limit]);
     return rows;
 };

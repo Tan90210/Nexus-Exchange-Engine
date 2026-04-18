@@ -2,8 +2,8 @@ import * as OrderQueries from '../db/queries/orders.js';
 
 class OrderService {
     static async cancelOrder(userId, orderId) {
-        // First verify ownership
-        const [orders] = await OrderQueries.getUserOrders(userId, 100);
+        // First verify ownership — getUserOrders already returns the rows array directly
+        const orders = await OrderQueries.getUserOrders(userId, 100);
         const order = orders.find(o => o.id === orderId);
 
         if (!order) {
