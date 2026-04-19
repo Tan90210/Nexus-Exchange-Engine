@@ -21,13 +21,22 @@ class TradeService {
             const matchPrice = orderType === 'LIMIT' ? limitPrice : null;
             const myOrderId = await createOrder(userId, assetId, side, orderType, qty, limitPrice);
 
-            // 2. Find a matching counter-order
-            const match = await findMatchingOrder(assetId, side, qty, matchPrice);
+            let remainingQtyToFill = parseFloat(qty);
+            let totalExecutedValue = 0;
+            let lastExecutedPrice = 0;
+            let tradeIds = [];
 
-            if (match) {
+            while (remainingQtyToFill > 0) {
+                // 2. Find a matching counter-order
+                const match = await findMatchingOrder(assetId, side, remainingQtyToFill, matchPrice);
+
+                if (!match) {
+                    // No more liquidity at our price
+                    break;
+                }
+
                 // 3. Determine executed price:
                 //    Priority: our limit price → matched order's limit price → live asset price
-                //    This prevents the ₹0 bug when both sides are MARKET orders.
                 let executedPrice = matchPrice || match.limit_price || null;
                 if (!executedPrice || executedPrice <= 0) {
                     const asset = await getAssetById(assetId);
@@ -36,15 +45,18 @@ class TradeService {
                 executedPrice = parseFloat(executedPrice);
 
                 const matchRemaining = parseFloat(match.qty) - parseFloat(match.filled_qty || 0);
-                const fillQty = Math.min(parseFloat(qty), matchRemaining);
+                const fillQty = Math.min(remainingQtyToFill, matchRemaining);
 
                 const buyOrderId = side === 'BUY' ? myOrderId : match.id;
                 const sellOrderId = side === 'SELL' ? myOrderId : match.id;
 
                 let tradeId;
 
-                // Full fill — both orders completely satisfy each other
-                if (fillQty === parseFloat(qty) && fillQty === matchRemaining) {
+                const myTotalQty = parseFloat(qty);
+                const matchTotalQty = parseFloat(match.qty);
+
+                // Full fill — both orders completely satisfy each other cleanly on the first pass
+                if (fillQty === myTotalQty && fillQty === matchTotalQty && remainingQtyToFill === myTotalQty) {
                     const result = await executeTradeProcedure(buyOrderId, sellOrderId, assetId, fillQty, executedPrice);
                     tradeId = result?.tradeId ?? result?.trade_id;
                 } else {
@@ -52,11 +64,23 @@ class TradeService {
                     tradeId = result?.tradeId ?? result?.trade_id;
                 }
 
+                tradeIds.push(tradeId);
+                totalExecutedValue += (executedPrice * fillQty);
+                lastExecutedPrice = executedPrice;
+                remainingQtyToFill -= fillQty;
+            }
+
+            if (tradeIds.length > 0) {
+                if (remainingQtyToFill > 0 && orderType === 'MARKET') {
+                    await updateOrderStatus(myOrderId, 'CANCELLED');
+                }
+
                 return {
-                    tradeId,
-                    status: fillQty === qty ? 'FILLED' : 'PARTIALLY_FILLED',
-                    executedPrice: executedPrice,
-                    totalValue: executedPrice * fillQty
+                    tradeId: tradeIds[0], // Return first tradeId for backwards compatibility
+                    tradeIds: tradeIds,
+                    status: remainingQtyToFill === 0 ? 'FILLED' : 'PARTIALLY_FILLED',
+                    executedPrice: lastExecutedPrice,
+                    totalValue: totalExecutedValue
                 };
             } else {
                 if (orderType === 'MARKET') {

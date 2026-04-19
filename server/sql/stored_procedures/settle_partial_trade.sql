@@ -118,11 +118,9 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'INSUFFICIENT_HOLDINGS';
     END IF;
 
-    IF v_buy_reserved_cash = 0 THEN
-        UPDATE wallets
-        SET balance = balance - v_total_cost
-        WHERE user_id = v_buyer_id;
-    END IF;
+    UPDATE wallets
+    SET balance = balance - v_total_cost
+    WHERE user_id = v_buyer_id;
 
     UPDATE wallets
     SET balance = balance + v_total_cost
@@ -134,14 +132,12 @@ BEGIN
         avg_cost_basis = (avg_cost_basis * quantity + v_total_cost) / (quantity + p_available_qty),
         quantity = quantity + p_available_qty;
 
-    IF v_sell_reserved_qty = 0 THEN
-        UPDATE holdings
-        SET quantity = quantity - p_available_qty
-        WHERE user_id = v_seller_id AND asset_id = p_asset_id;
+    UPDATE holdings
+    SET quantity = quantity - p_available_qty
+    WHERE user_id = v_seller_id AND asset_id = p_asset_id;
 
-        DELETE FROM holdings
-        WHERE user_id = v_seller_id AND asset_id = p_asset_id AND quantity = 0;
-    END IF;
+    DELETE FROM holdings
+    WHERE user_id = v_seller_id AND asset_id = p_asset_id AND quantity = 0;
 
     INSERT INTO trades (buy_order_id, sell_order_id, asset_id, qty, executed_price)
     VALUES (p_buy_order_id, p_sell_order_id, p_asset_id, p_available_qty, p_price);
