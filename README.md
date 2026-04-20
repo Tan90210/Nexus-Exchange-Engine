@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**High-Concurrency Digital Asset Exchange — DBMS Group Project**
+**High-Concurrency Digital Asset Exchange**
 
 [![Frontend](https://img.shields.io/badge/Frontend-React%2018%20+%20Vite-61DAFB?logo=react)](https://reactjs.org/)
 [![Backend](https://img.shields.io/badge/Backend-Node.js%20+%20Express-339933?logo=node.js)](https://nodejs.org/)
@@ -198,7 +198,5 @@ Open **http://localhost:5173**
 ---
 
 <div align="center">
-
-Built for the DBMS course · University Project · 2025–26
 
 </div>
